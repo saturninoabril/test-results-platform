@@ -5,31 +5,32 @@ Tests data consistency across related entities and realistic data volumes.
 
 import asyncio
 import sys
-import os
 from pathlib import Path
 
 # Add the project root to the path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from httpx import AsyncClient, ASGITransport
-from src.main import app
-from src.lib.middleware import get_current_context, AuthenticatedUser, UserRole
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
+
+from httpx import ASGITransport, AsyncClient
+
 from src.lib.auth import TokenClaims, TokenScope, TokenType
 from src.lib.database import init_database
-from datetime import datetime, timezone, timedelta
-from uuid import uuid4
+from src.lib.middleware import AuthenticatedUser, UserRole, get_current_context
+from src.main import app
 
 
 def mock_auth():
     claims = TokenClaims(
         sub="integration:user:123",
-        exp=datetime.now(timezone.utc) + timedelta(hours=1),
+        exp=datetime.now(UTC) + timedelta(hours=1),
         scope=TokenScope.USER,
         token_type=TokenType.ACCESS,
         username="integration_user",
         email="integration@example.com",
-        role=UserRole.ADMIN
+        role=UserRole.ADMIN,
     )
     return AuthenticatedUser(
         user_id="integration:user:123",
@@ -37,13 +38,23 @@ def mock_auth():
         email="integration@example.com",
         role=UserRole.ADMIN,
         permissions=[
-            "frameworks:read", "frameworks:write", "frameworks:delete",
-            "environments:read", "environments:write", "environments:delete",
-            "suites:read", "suites:write", "suites:delete",
-            "results:read", "results:write", "results:delete",
-            "artifacts:read", "artifacts:write", "artifacts:delete"
+            "frameworks:read",
+            "frameworks:write",
+            "frameworks:delete",
+            "environments:read",
+            "environments:write",
+            "environments:delete",
+            "suites:read",
+            "suites:write",
+            "suites:delete",
+            "results:read",
+            "results:write",
+            "results:delete",
+            "artifacts:read",
+            "artifacts:write",
+            "artifacts:delete",
         ],
-        token_claims=claims
+        token_claims=claims,
     )
 
 
@@ -57,17 +68,17 @@ async def test_complete_workflow():
 
         # Step 1: Create a test framework
         import random
+
         framework_data = {
             "name": "playwright",
             "version": f"1.55.{random.randint(1000, 9999)}",
-            "metadata": {
-                "actualWorkers": 4,
-                "projects": ["setup", "chrome", "firefox", "webkit"]
-            }
+            "metadata": {"actualWorkers": 4, "projects": ["setup", "chrome", "firefox", "webkit"]},
         }
 
         framework_response = await client.post("/api/v1/frameworks", json=framework_data)
-        assert framework_response.status_code == 201, f"Framework creation failed: {framework_response.text}"
+        assert framework_response.status_code == 201, (
+            f"Framework creation failed: {framework_response.text}"
+        )
         framework = framework_response.json()
         framework_id = framework["id"]
         print(f"✅ Created framework: {framework['name']} v{framework['version']}")
@@ -75,19 +86,19 @@ async def test_complete_workflow():
         # Step 2: Create test environments
         environments = []
         import time
+
         timestamp = int(time.time())
         for browser in ["chrome", "firefox", "webkit"]:
             env_data = {
                 "name": f"{browser}-desktop-{timestamp}",
                 "browser": browser,
                 "os": "linux",
-                "metadata": {
-                    "viewport": "1920x1080",
-                    "deviceScaleFactor": 1
-                }
+                "metadata": {"viewport": "1920x1080", "deviceScaleFactor": 1},
             }
             env_response = await client.post("/api/v1/environments", json=env_data)
-            assert env_response.status_code == 201, f"Environment creation failed: {env_response.text}"
+            assert env_response.status_code == 201, (
+                f"Environment creation failed: {env_response.text}"
+            )
             environments.append(env_response.json())
 
         print(f"✅ Created {len(environments)} test environments")
@@ -104,14 +115,12 @@ async def test_complete_workflow():
                 "failed_count": 3,
                 "skipped_count": 2,
                 "duration_ms": 125000 + (len(suites) * 5000),
-                "metadata": {
-                    "browser": env["browser"],
-                    "retries": 2,
-                    "parallel": True
-                }
+                "metadata": {"browser": env["browser"], "retries": 2, "parallel": True},
             }
             suite_response = await client.post("/api/v1/suites", json=suite_data)
-            assert suite_response.status_code == 201, f"Suite creation failed: {suite_response.text}"
+            assert suite_response.status_code == 201, (
+                f"Suite creation failed: {suite_response.text}"
+            )
             suites.append(suite_response.json())
 
         print(f"✅ Created {len(suites)} test suites")
@@ -119,13 +128,38 @@ async def test_complete_workflow():
         # Step 4: Create test results for each suite
         all_results = []
         test_scenarios = [
-            {"name": "user-login", "status": "passed", "duration_ms": 2500, "tags": ["auth", "critical"]},
-            {"name": "product-search", "status": "passed", "duration_ms": 1800, "tags": ["search", "e2e"]},
-            {"name": "checkout-flow", "status": "failed", "duration_ms": 5200, "tags": ["checkout", "critical"],
-             "error_message": "Payment form validation failed"},
-            {"name": "user-profile", "status": "passed", "duration_ms": 1200, "tags": ["profile", "user"]},
-            {"name": "admin-dashboard", "status": "skipped", "duration_ms": 0, "tags": ["admin"],
-             "error_message": "Admin user not available"}
+            {
+                "name": "user-login",
+                "status": "passed",
+                "duration_ms": 2500,
+                "tags": ["auth", "critical"],
+            },
+            {
+                "name": "product-search",
+                "status": "passed",
+                "duration_ms": 1800,
+                "tags": ["search", "e2e"],
+            },
+            {
+                "name": "checkout-flow",
+                "status": "failed",
+                "duration_ms": 5200,
+                "tags": ["checkout", "critical"],
+                "error_message": "Payment form validation failed",
+            },
+            {
+                "name": "user-profile",
+                "status": "passed",
+                "duration_ms": 1200,
+                "tags": ["profile", "user"],
+            },
+            {
+                "name": "admin-dashboard",
+                "status": "skipped",
+                "duration_ms": 0,
+                "tags": ["admin"],
+                "error_message": "Admin user not available",
+            },
         ]
 
         for suite in suites:
@@ -142,11 +176,13 @@ async def test_complete_workflow():
                     "full_title": f"E2E Tests > {scenario['name']}",
                     "metadata": {
                         "browser": suite["metadata"]["browser"],
-                        "retry_count": 0 if scenario["status"] == "passed" else 1
-                    }
+                        "retry_count": 0 if scenario["status"] == "passed" else 1,
+                    },
                 }
                 result_response = await client.post("/api/v1/results", json=result_data)
-                assert result_response.status_code == 201, f"Result creation failed: {result_response.text}"
+                assert result_response.status_code == 201, (
+                    f"Result creation failed: {result_response.text}"
+                )
                 suite_results.append(result_response.json())
 
             all_results.extend(suite_results)
@@ -167,7 +203,7 @@ async def test_complete_workflow():
                 "tags": ["bulk", "performance"],
                 "external_id": f"bulk-{i:02d}",
                 "full_title": f"Bulk Tests > bulk-test-{i:02d}",
-                "metadata": {"batch_index": i}
+                "metadata": {"batch_index": i},
             }
             bulk_results.append(result_data)
 
@@ -182,7 +218,9 @@ async def test_complete_workflow():
         stats_response = await client.get(f"/api/v1/suites/statistics?framework_id={framework_id}")
         assert stats_response.status_code == 200, f"Statistics failed: {stats_response.text}"
         stats = stats_response.json()
-        print(f"📈 Statistics: {stats['total_suites']} suites, {stats['total_tests']} tests, {stats['pass_rate_percent']:.1f}% pass rate")
+        print(
+            f"📈 Statistics: {stats['total_suites']} suites, {stats['total_tests']} tests, {stats['pass_rate_percent']:.1f}% pass rate"
+        )
 
         # Test filtering by status
         failed_results_response = await client.get("/api/v1/results?status=failed")
@@ -230,7 +268,7 @@ async def test_complete_workflow():
             "total_count": 1,
             "passed_count": 1,
             "failed_count": 0,
-            "skipped_count": 0
+            "skipped_count": 0,
         }
         invalid_suite_response = await client.post("/api/v1/suites", json=invalid_suite_data)
         assert invalid_suite_response.status_code == 422, "Foreign key validation failed"
@@ -250,22 +288,24 @@ async def test_performance():
 
         # Create framework and environment for performance testing
         import random
+
         framework_data = {
             "name": "cypress",
             "version": f"7.2.{random.randint(1000, 9999)}",
-            "metadata": {"mocha": {"version": "7.2.0"}}
+            "metadata": {"mocha": {"version": "7.2.0"}},
         }
         framework_response = await client.post("/api/v1/frameworks", json=framework_data)
         assert framework_response.status_code == 201
         framework = framework_response.json()
 
         import time
+
         timestamp = int(time.time())
         env_data = {
             "name": f"performance-test-env-{timestamp}",
             "browser": "chrome",
             "os": "ubuntu",
-            "metadata": {"headless": True}
+            "metadata": {"headless": True},
         }
         env_response = await client.post("/api/v1/environments", json=env_data)
         assert env_response.status_code == 201
@@ -280,7 +320,7 @@ async def test_performance():
             "failed_count": 10,
             "skipped_count": 5,
             "duration_ms": 300000,
-            "metadata": {"performance_test": True}
+            "metadata": {"performance_test": True},
         }
         suite_response = await client.post("/api/v1/suites", json=suite_data)
         assert suite_response.status_code == 201
@@ -298,11 +338,12 @@ async def test_performance():
                 "tags": ["performance", "bulk"],
                 "external_id": f"perf-{i:03d}",
                 "full_title": f"Performance Test Suite > perf-test-{i:03d}",
-                "metadata": {"test_number": i}
+                "metadata": {"test_number": i},
             }
             bulk_results.append(result_data)
 
         import time
+
         start_time = time.time()
         bulk_response = await client.post("/api/v1/results/bulk", json=bulk_results)
         end_time = time.time()
@@ -313,13 +354,17 @@ async def test_performance():
 
         # Test filtering performance
         start_time = time.time()
-        filtered_response = await client.get(f"/api/v1/results?suite_id={suite['id']}&status=failed")
+        filtered_response = await client.get(
+            f"/api/v1/results?suite_id={suite['id']}&status=failed"
+        )
         end_time = time.time()
 
         assert filtered_response.status_code == 200
         failed_results = filtered_response.json()
         filter_time = end_time - start_time
-        print(f"🔍 Filtered results in {filter_time:.3f} seconds, found {len(failed_results)} failed")
+        print(
+            f"🔍 Filtered results in {filter_time:.3f} seconds, found {len(failed_results)} failed"
+        )
 
         assert len(failed_results) == 10  # Should find 10 failed results
         print("✅ Performance test passed!")
@@ -327,6 +372,7 @@ async def test_performance():
 
 
 if __name__ == "__main__":
+
     async def run_all_tests():
         success1 = await test_complete_workflow()
         success2 = await test_performance()

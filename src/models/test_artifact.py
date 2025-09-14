@@ -3,14 +3,28 @@ TestArtifact model for managing files associated with test execution.
 Represents screenshots, videos, reports, and other test artifacts stored in S3.
 """
 
+from __future__ import annotations
+
+import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Any, Optional
-import uuid
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from .test_result import TestResult
+    from .test_suite import TestSuite
 
 from sqlalchemy import (
-    String, Integer, DateTime, ForeignKey, Index, CheckConstraint,
-    Enum as SQLEnum, UniqueConstraint
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy import (
+    Enum as SQLEnum,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
@@ -20,6 +34,7 @@ from .base import BaseModel
 
 class ArtifactType(str, Enum):
     """Test artifact type enumeration."""
+
     SCREENSHOT = "screenshot"
     VIDEO = "video"
     REPORT = "report"
@@ -34,14 +49,14 @@ class TestArtifact(BaseModel):
     __tablename__ = "test_artifacts"
 
     # Foreign key relationships (one of these must be set)
-    result_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    result_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("test_results.id", ondelete="CASCADE"),
         nullable=True,
         comment="Foreign key to test result (for result-level artifacts)",
     )
 
-    suite_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    suite_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("test_suites.id", ondelete="CASCADE"),
         nullable=True,
@@ -81,7 +96,7 @@ class TestArtifact(BaseModel):
         comment="S3 object key for the stored file",
     )
 
-    storage_url: Mapped[Optional[str]] = mapped_column(
+    storage_url: Mapped[str | None] = mapped_column(
         String(1000),
         nullable=True,
         comment="Generated signed URL (temporary)",
@@ -94,13 +109,13 @@ class TestArtifact(BaseModel):
     )
 
     # Lifecycle management
-    expires_at: Mapped[Optional[datetime]] = mapped_column(
+    expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="Expiration time for automatic cleanup",
     )
 
-    config_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    config_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Artifact-specific metadata",
@@ -108,15 +123,10 @@ class TestArtifact(BaseModel):
 
     # Relationships
     test_result: Mapped[Optional["TestResult"]] = relationship(
-        "TestResult",
-        back_populates="test_artifacts",
-        lazy="select"
+        "TestResult", back_populates="test_artifacts", lazy="select"
     )
 
-    test_suite: Mapped[Optional["TestSuite"]] = relationship(
-        "TestSuite",
-        lazy="select"
-    )
+    test_suite: Mapped[Optional["TestSuite"]] = relationship("TestSuite", lazy="select")
 
     # Constraints and indexes
     __table_args__ = (
@@ -124,7 +134,7 @@ class TestArtifact(BaseModel):
         CheckConstraint(
             "(result_id IS NOT NULL AND suite_id IS NULL) OR "
             "(result_id IS NULL AND suite_id IS NOT NULL)",
-            name="ck_artifact_has_one_parent"
+            name="ck_artifact_has_one_parent",
         ),
         CheckConstraint("file_size > 0", name="ck_file_size_positive"),
         CheckConstraint("file_size <= 104857600", name="ck_file_size_limit_100mb"),
@@ -140,25 +150,20 @@ class TestArtifact(BaseModel):
 
     # Allowed MIME types for validation
     ALLOWED_MIME_TYPES = {
-        ArtifactType.SCREENSHOT: [
-            "image/png", "image/jpeg", "image/gif", "image/webp"
-        ],
-        ArtifactType.VIDEO: [
-            "video/mp4", "video/webm", "video/avi", "video/mov"
-        ],
+        ArtifactType.SCREENSHOT: ["image/png", "image/jpeg", "image/gif", "image/webp"],
+        ArtifactType.VIDEO: ["video/mp4", "video/webm", "video/avi", "video/mov"],
         ArtifactType.REPORT: [
-            "text/html", "application/json", "application/xml", "text/plain",
-            "application/pdf"
+            "text/html",
+            "application/json",
+            "application/xml",
+            "text/plain",
+            "application/pdf",
         ],
-        ArtifactType.LOG: [
-            "text/plain", "application/json", "text/csv"
-        ],
-        ArtifactType.TRACE: [
-            "application/json", "text/plain", "application/octet-stream"
-        ],
+        ArtifactType.LOG: ["text/plain", "application/json", "text/csv"],
+        ArtifactType.TRACE: ["application/json", "text/plain", "application/octet-stream"],
         ArtifactType.OTHER: [
             # Allow any MIME type for "other" artifacts
-        ]
+        ],
     }
 
     @validates("file_name")
@@ -237,7 +242,9 @@ class TestArtifact(BaseModel):
         return checksum
 
     @validates("config_metadata")
-    def validate_config_metadata(self, key: str, config_metadata: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def validate_config_metadata(
+        self, key: str, config_metadata: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
         """Validate config_metadata is a proper dictionary."""
         if config_metadata is None:
             return None

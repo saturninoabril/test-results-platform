@@ -1,22 +1,25 @@
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from typing import Any
+
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import structlog
-from contextlib import asynccontextmanager
 
-from .api.frameworks import router as frameworks_router
-from .api.environments import router as environments_router
-from .api.suites import router as suites_router
-from .api.results import router as results_router
 from .api.artifacts import router as artifacts_router
 from .api.auth import router as auth_router
-from .services.notification_service import get_notification_service, close_notification_service
+from .api.environments import router as environments_router
+from .api.frameworks import router as frameworks_router
+from .api.results import router as results_router
+from .api.suites import router as suites_router
 from .lib.config import get_settings
+from .services.notification_service import close_notification_service, get_notification_service
 
 logger = structlog.get_logger()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan events."""
     settings = get_settings()
 
@@ -33,8 +36,8 @@ async def lifespan(app: FastAPI):
             details={
                 "Version": "0.4.0",
                 "Environment": settings.app.env,
-                "Mattermost Enabled": str(settings.mattermost.enabled)
-            }
+                "Mattermost Enabled": str(settings.mattermost.enabled),
+            },
         )
         logger.debug("Service startup notification sent")
     except Exception as e:
@@ -51,7 +54,7 @@ async def lifespan(app: FastAPI):
         await notification_service.notify_system_alert(
             title="API Service Shutting Down",
             message="Test Results Management API is shutting down",
-            severity="warning"
+            severity="warning",
         )
         logger.debug("Service shutdown notification sent")
     except Exception as e:
@@ -59,6 +62,7 @@ async def lifespan(app: FastAPI):
 
     # Close notification service
     await close_notification_service()
+
 
 app = FastAPI(
     title="Test Results Management API",
@@ -87,13 +91,13 @@ app.include_router(auth_router)
 
 
 @app.get("/health")
-async def health_check():
+async def health_check() -> dict[str, str]:
     """Health check endpoint"""
     return {"status": "healthy", "service": "test-results-api", "version": "0.4.0"}
 
 
 @app.get("/")
-async def root():
+async def root() -> dict[str, Any]:
     """API information"""
     return {
         "message": "Test Results Management API",
@@ -105,4 +109,5 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

@@ -3,13 +3,19 @@ Unit tests for SQLAlchemy models.
 Tests model validation, constraints, and business logic.
 """
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
+
 from src.models import (
-    TestFramework, TestEnvironment, TestSuite, TestResult, TestArtifact,
-    TestStatus, ArtifactType
+    ArtifactType,
+    TestArtifact,
+    TestEnvironment,
+    TestFramework,
+    TestResult,
+    TestStatus,
+    TestSuite,
 )
 
 
@@ -19,9 +25,7 @@ class TestTestFrameworkModel:
     def test_create_valid_framework(self):
         """Test creating a valid framework."""
         framework = TestFramework(
-            name="playwright",
-            version="1.55.0",
-            config_metadata={"projects": ["chrome", "firefox"]}
+            name="playwright", version="1.55.0", config_metadata={"projects": ["chrome", "firefox"]}
         )
         assert framework.name == "playwright"
         assert framework.version == "1.55.0"
@@ -60,11 +64,7 @@ class TestTestFrameworkModel:
     def test_framework_metadata_validation(self):
         """Test framework metadata validation."""
         # Valid metadata
-        framework = TestFramework(
-            name="test",
-            version="1.0.0",
-            config_metadata={"key": "value"}
-        )
+        framework = TestFramework(name="test", version="1.0.0", config_metadata={"key": "value"})
         assert framework.config_metadata == {"key": "value"}
 
         # None metadata is valid
@@ -90,7 +90,7 @@ class TestTestEnvironmentModel:
             name="staging",
             browser="chromium",
             os="ubuntu-22.04",
-            config_metadata={"headless": True}
+            config_metadata={"headless": True},
         )
         assert env.name == "staging"
         assert env.browser == "chromium"
@@ -137,7 +137,7 @@ class TestTestSuiteModel:
 
     def test_create_valid_suite(self):
         """Test creating a valid test suite."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         suite = TestSuite(
             name="E2E Tests",
             framework_id=uuid4(),
@@ -149,7 +149,7 @@ class TestTestSuiteModel:
             duration_ms=5000,
             started_at=now,
             completed_at=now,
-            config_metadata={"browser": "chrome"}
+            config_metadata={"browser": "chrome"},
         )
         assert suite.name == "E2E Tests"
         assert suite.total_tests == 10
@@ -170,8 +170,8 @@ class TestTestSuiteModel:
             failed_tests=0,
             skipped_tests=0,
             duration_ms=0,
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc)
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
         )
         assert suite.name == "Test Suite"
 
@@ -186,14 +186,14 @@ class TestTestSuiteModel:
                 failed_tests=0,
                 skipped_tests=0,
                 duration_ms=0,
-                started_at=datetime.now(timezone.utc),
-                completed_at=datetime.now(timezone.utc)
+                started_at=datetime.now(UTC),
+                completed_at=datetime.now(UTC),
             )
 
     def test_suite_test_count_validation(self):
         """Test suite test count validation."""
         # Valid counts
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         suite = TestSuite(
             name="Test",
             framework_id=uuid4(),
@@ -204,7 +204,7 @@ class TestTestSuiteModel:
             skipped_tests=1,
             duration_ms=1000,
             started_at=now,
-            completed_at=now
+            completed_at=now,
         )
         suite.validate_consistency()  # Should not raise
 
@@ -220,7 +220,7 @@ class TestTestSuiteModel:
                 skipped_tests=0,
                 duration_ms=0,
                 started_at=now,
-                completed_at=now
+                completed_at=now,
             )
 
     def test_suite_success_rate(self):
@@ -234,8 +234,8 @@ class TestTestSuiteModel:
             failed_tests=2,
             skipped_tests=0,
             duration_ms=5000,
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc)
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
         )
         assert suite.success_rate == 80.0
 
@@ -256,8 +256,8 @@ class TestTestSuiteModel:
             failed_tests=0,
             skipped_tests=0,
             duration_ms=2500,
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc)
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
         )
         assert suite.duration_seconds == 2.5
 
@@ -275,7 +275,7 @@ class TestTestResultModel:
             duration_ms=1000,
             tags=["smoke", "regression"],
             external_id="test-123",
-            config_metadata={"retry": True}
+            config_metadata={"retry": True},
         )
         assert result.test_name == "test should pass"
         assert result.status == TestStatus.PASSED
@@ -290,7 +290,7 @@ class TestTestResultModel:
             test_name="test",
             full_title="test",
             status=TestStatus.PASSED,
-            duration_ms=1000
+            duration_ms=1000,
         )
         assert result.is_passed is True
         assert result.is_failed is False
@@ -310,7 +310,7 @@ class TestTestResultModel:
             full_title="test",
             status=TestStatus.PASSED,
             duration_ms=1000,
-            tags=["smoke", "regression"]
+            tags=["smoke", "regression"],
         )
         assert result.tags == ["smoke", "regression"]
 
@@ -322,7 +322,7 @@ class TestTestResultModel:
                 full_title="test",
                 status=TestStatus.PASSED,
                 duration_ms=1000,
-                tags=[f"tag{i}" for i in range(25)]
+                tags=[f"tag{i}" for i in range(25)],
             )
 
     def test_result_has_tag(self):
@@ -333,7 +333,7 @@ class TestTestResultModel:
             full_title="test",
             status=TestStatus.PASSED,
             duration_ms=1000,
-            tags=["smoke", "REGRESSION"]
+            tags=["smoke", "REGRESSION"],
         )
         assert result.has_tag("smoke") is True
         assert result.has_tag("regression") is True  # Case insensitive
@@ -357,7 +357,7 @@ class TestTestArtifactModel:
             mime_type="image/png",
             storage_key="screenshots/test-123.png",
             checksum="a" * 64,
-            config_metadata={"width": 1920, "height": 1080}
+            config_metadata={"width": 1920, "height": 1080},
         )
         assert artifact.file_name == "test-screenshot.png"
         assert artifact.artifact_type == ArtifactType.SCREENSHOT
@@ -375,7 +375,7 @@ class TestTestArtifactModel:
             file_size=1024,
             mime_type="image/png",
             storage_key="test.png",
-            checksum="a" * 64
+            checksum="a" * 64,
         )
         assert artifact.file_size == 1024
 
@@ -388,7 +388,7 @@ class TestTestArtifactModel:
                 file_size=0,
                 mime_type="image/png",
                 storage_key="test.png",
-                checksum="a" * 64
+                checksum="a" * 64,
             )
 
         with pytest.raises(ValueError, match="File size cannot exceed 100MB"):
@@ -399,7 +399,7 @@ class TestTestArtifactModel:
                 file_size=101 * 1024 * 1024,  # 101MB
                 mime_type="image/png",
                 storage_key="test.png",
-                checksum="a" * 64
+                checksum="a" * 64,
             )
 
     def test_artifact_checksum_validation(self):
@@ -412,7 +412,7 @@ class TestTestArtifactModel:
             file_size=1024,
             mime_type="image/png",
             storage_key="test.png",
-            checksum="a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456"
+            checksum="a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
         )
         assert len(artifact.checksum) == 64
 
@@ -425,7 +425,7 @@ class TestTestArtifactModel:
                 file_size=1024,
                 mime_type="image/png",
                 storage_key="test.png",
-                checksum="short"
+                checksum="short",
             )
 
         with pytest.raises(ValueError, match="Checksum must be valid hexadecimal"):
@@ -436,7 +436,7 @@ class TestTestArtifactModel:
                 file_size=1024,
                 mime_type="image/png",
                 storage_key="test.png",
-                checksum="g" * 64  # Invalid hex character
+                checksum="g" * 64,  # Invalid hex character
             )
 
     def test_artifact_file_size_mb(self):
@@ -448,7 +448,7 @@ class TestTestArtifactModel:
             file_size=2 * 1024 * 1024,  # 2MB
             mime_type="image/png",
             storage_key="test.png",
-            checksum="a" * 64
+            checksum="a" * 64,
         )
         assert artifact.file_size_mb == 2.0
 
@@ -462,7 +462,7 @@ class TestTestArtifactModel:
             file_size=1024,
             mime_type="image/png",
             storage_key="test.png",
-            checksum="a" * 64
+            checksum="a" * 64,
         )
         artifact.validate_parent_relationship()  # Should not raise
 
@@ -474,7 +474,7 @@ class TestTestArtifactModel:
             file_size=1024,
             mime_type="text/html",
             storage_key="report.html",
-            checksum="b" * 64
+            checksum="b" * 64,
         )
         artifact.validate_parent_relationship()  # Should not raise
 
@@ -485,7 +485,7 @@ class TestTestArtifactModel:
             file_size=1024,
             mime_type="image/png",
             storage_key="test.png",
-            checksum="a" * 64
+            checksum="a" * 64,
         )
         with pytest.raises(ValueError, match="must be associated with either"):
             artifact.validate_parent_relationship()
@@ -499,7 +499,7 @@ class TestTestArtifactModel:
             file_size=1024,
             mime_type="image/png",
             storage_key="test.png",
-            checksum="a" * 64
+            checksum="a" * 64,
         )
         with pytest.raises(ValueError, match="cannot be associated with both"):
             artifact.validate_parent_relationship()

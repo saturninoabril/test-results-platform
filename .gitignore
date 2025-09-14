@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# SSL certificates (development only)
+certs/
+*.key
+*.crt
+*.pem
+
 # C extensions
 *.so
 
@@ -14,8 +20,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/

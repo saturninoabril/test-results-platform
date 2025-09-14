@@ -3,26 +3,26 @@ Comprehensive health check and monitoring system.
 """
 
 import asyncio
-import time
 import logging
-from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
-from enum import Enum
-import psutil
 import os
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+import sys
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any, Optional
+
+import psutil  # type: ignore[import-untyped]
 
 from .database_performance import get_database_manager
-from .storage import get_storage_client
-from .metrics import get_metrics_collector
+from .storage import get_storage_client  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
 
 class HealthStatus(Enum):
     """Health status levels."""
+
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
@@ -31,48 +31,48 @@ class HealthStatus(Enum):
 @dataclass
 class HealthCheck:
     """Individual health check result."""
+
     name: str
     status: HealthStatus
     response_time_ms: float
     message: str
-    details: Dict[str, Any] = None
+    details: Optional[dict[str, Any]] = None
 
 
 @dataclass
 class SystemHealth:
     """Overall system health status."""
+
     status: HealthStatus
     timestamp: datetime
     response_time_ms: float
-    checks: List[HealthCheck]
-    summary: Dict[str, Any] = None
+    checks: list[HealthCheck]
+    summary: Optional[dict[str, Any]] = None
 
 
 class HealthCheckManager:
     """Manages all health checks and monitoring."""
 
-    def __init__(self):
-        self.startup_time = datetime.now(timezone.utc)
-        self.check_history: List[SystemHealth] = []
+    def __init__(self) -> None:
+        self.startup_time = datetime.now(UTC)
+        self.check_history: list[SystemHealth] = []
         self.max_history = 100
 
     async def perform_basic_health_check(self) -> SystemHealth:
         """Perform basic health check for load balancer."""
         start_time = time.time()
 
-        checks = [
-            await self._check_api_ready()
-        ]
+        checks = [await self._check_api_ready()]
 
         overall_status = self._determine_overall_status(checks)
         response_time = (time.time() - start_time) * 1000
 
         return SystemHealth(
             status=overall_status,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             response_time_ms=response_time,
             checks=checks,
-            summary={"basic": True}
+            summary={"basic": True},
         )
 
     async def perform_detailed_health_check(self) -> SystemHealth:
@@ -94,24 +94,26 @@ class HealthCheckManager:
         valid_checks = []
         for i, check in enumerate(checks):
             if isinstance(check, Exception):
-                valid_checks.append(HealthCheck(
-                    name=f"check_{i}",
-                    status=HealthStatus.UNHEALTHY,
-                    response_time_ms=0,
-                    message=f"Check failed: {str(check)}"
-                ))
+                valid_checks.append(
+                    HealthCheck(
+                        name=f"check_{i}",
+                        status=HealthStatus.UNHEALTHY,
+                        response_time_ms=0,
+                        message=f"Check failed: {str(check)}",
+                    )
+                )
             else:
-                valid_checks.append(check)
+                valid_checks.append(check)  # type: ignore[arg-type]
 
         overall_status = self._determine_overall_status(valid_checks)
         response_time = (time.time() - start_time) * 1000
 
         system_health = SystemHealth(
             status=overall_status,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             response_time_ms=response_time,
             checks=valid_checks,
-            summary=self._generate_summary(valid_checks)
+            summary=self._generate_summary(valid_checks),
         )
 
         # Store in history
@@ -125,7 +127,7 @@ class HealthCheckManager:
 
         try:
             # Basic readiness check
-            uptime = datetime.now(timezone.utc) - self.startup_time
+            uptime = datetime.now(UTC) - self.startup_time
             response_time = (time.time() - start_time) * 1000
 
             return HealthCheck(
@@ -135,8 +137,8 @@ class HealthCheckManager:
                 message="API is ready",
                 details={
                     "uptime_seconds": uptime.total_seconds(),
-                    "startup_time": self.startup_time.isoformat()
-                }
+                    "startup_time": self.startup_time.isoformat(),
+                },
             )
 
         except Exception as e:
@@ -145,7 +147,7 @@ class HealthCheckManager:
                 name="api_ready",
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=response_time,
-                message=f"API not ready: {str(e)}"
+                message=f"API not ready: {str(e)}",
             )
 
     async def _check_database_health(self) -> HealthCheck:
@@ -173,8 +175,10 @@ class HealthCheckManager:
                     name="database",
                     status=status,
                     response_time_ms=response_time,
-                    message="Database is healthy" if status == HealthStatus.HEALTHY else "Database performance degraded",
-                    details=health_data
+                    message="Database is healthy"
+                    if status == HealthStatus.HEALTHY
+                    else "Database performance degraded",
+                    details=health_data,
                 )
             else:
                 return HealthCheck(
@@ -182,7 +186,7 @@ class HealthCheckManager:
                     status=HealthStatus.UNHEALTHY,
                     response_time_ms=response_time,
                     message=f"Database unhealthy: {health_data.get('error', 'Unknown error')}",
-                    details=health_data
+                    details=health_data,
                 )
 
         except Exception as e:
@@ -191,7 +195,7 @@ class HealthCheckManager:
                 name="database",
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=response_time,
-                message=f"Database check failed: {str(e)}"
+                message=f"Database check failed: {str(e)}",
             )
 
     async def _check_storage_health(self) -> HealthCheck:
@@ -218,19 +222,21 @@ class HealthCheckManager:
                     name="storage",
                     status=status,
                     response_time_ms=response_time,
-                    message="Storage is healthy" if status == HealthStatus.HEALTHY else "Storage performance degraded",
+                    message="Storage is healthy"
+                    if status == HealthStatus.HEALTHY
+                    else "Storage performance degraded",
                     details={
                         "storage_type": storage_client.config.storage_type,
                         "endpoint": storage_client.config.endpoint,
-                        "bucket": storage_client.config.bucket
-                    }
+                        "bucket": storage_client.config.bucket,
+                    },
                 )
             else:
                 return HealthCheck(
                     name="storage",
                     status=HealthStatus.UNHEALTHY,
                     response_time_ms=response_time,
-                    message="Storage connectivity failed"
+                    message="Storage connectivity failed",
                 )
 
         except Exception as e:
@@ -239,7 +245,7 @@ class HealthCheckManager:
                 name="storage",
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=response_time,
-                message=f"Storage check failed: {str(e)}"
+                message=f"Storage check failed: {str(e)}",
             )
 
     async def _check_system_resources(self) -> HealthCheck:
@@ -254,7 +260,7 @@ class HealthCheckManager:
 
             # Get system-wide metrics
             system_memory = psutil.virtual_memory()
-            system_disk = psutil.disk_usage('/')
+            system_disk = psutil.disk_usage("/")
 
             response_time = (time.time() - start_time) * 1000
 
@@ -295,8 +301,8 @@ class HealthCheckManager:
                     "system_memory_percent": system_memory.percent,
                     "system_disk_percent": system_disk.percent,
                     "available_memory_mb": system_memory.available / 1024 / 1024,
-                    "available_disk_gb": system_disk.free / 1024 / 1024 / 1024
-                }
+                    "available_disk_gb": system_disk.free / 1024 / 1024 / 1024,
+                },
             )
 
         except Exception as e:
@@ -305,7 +311,7 @@ class HealthCheckManager:
                 name="system_resources",
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=response_time,
-                message=f"System resource check failed: {str(e)}"
+                message=f"System resource check failed: {str(e)}",
             )
 
     async def _check_dependencies(self) -> HealthCheck:
@@ -314,36 +320,30 @@ class HealthCheckManager:
 
         try:
             # Check if we can import critical modules
-            dependencies_status = {
+            dependencies_status: dict[str, Any] = {
                 "fastapi": True,
                 "sqlalchemy": True,
                 "aioboto3": True,
                 "structlog": True,
-                "prometheus_client": True
+                "prometheus_client": True,
             }
 
             # Try basic operations
             try:
-                import fastapi
-                import sqlalchemy
                 import aioboto3
+                import fastapi
+                import prometheus_client  # type: ignore[import-not-found]
+                import sqlalchemy
                 import structlog
-                import prometheus_client
             except ImportError as e:
                 dependencies_status["import_error"] = str(e)
 
             response_time = (time.time() - start_time) * 1000
 
             # Check environment variables
-            critical_env_vars = [
-                "DATABASE_URL",
-                "JWT_SECRET_KEY"
-            ]
+            critical_env_vars = ["DATABASE_URL", "JWT_SECRET_KEY"]
 
-            missing_env_vars = [
-                var for var in critical_env_vars
-                if not os.getenv(var)
-            ]
+            missing_env_vars = [var for var in critical_env_vars if not os.getenv(var)]
 
             status = HealthStatus.HEALTHY
             message = "All dependencies available"
@@ -360,8 +360,8 @@ class HealthCheckManager:
                 details={
                     "dependencies": dependencies_status,
                     "missing_env_vars": missing_env_vars,
-                    "python_version": f"{os.sys.version_info.major}.{os.sys.version_info.minor}.{os.sys.version_info.micro}"
-                }
+                    "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+                },
             )
 
         except Exception as e:
@@ -370,10 +370,10 @@ class HealthCheckManager:
                 name="dependencies",
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=response_time,
-                message=f"Dependencies check failed: {str(e)}"
+                message=f"Dependencies check failed: {str(e)}",
             )
 
-    def _determine_overall_status(self, checks: List[HealthCheck]) -> HealthStatus:
+    def _determine_overall_status(self, checks: list[HealthCheck]) -> HealthStatus:
         """Determine overall system status from individual checks."""
 
         if not checks:
@@ -390,13 +390,13 @@ class HealthCheckManager:
         # All checks healthy
         return HealthStatus.HEALTHY
 
-    def _generate_summary(self, checks: List[HealthCheck]) -> Dict[str, Any]:
+    def _generate_summary(self, checks: list[HealthCheck]) -> dict[str, Any]:
         """Generate health check summary."""
 
         status_counts = {
             "healthy": sum(1 for check in checks if check.status == HealthStatus.HEALTHY),
             "degraded": sum(1 for check in checks if check.status == HealthStatus.DEGRADED),
-            "unhealthy": sum(1 for check in checks if check.status == HealthStatus.UNHEALTHY)
+            "unhealthy": sum(1 for check in checks if check.status == HealthStatus.UNHEALTHY),
         }
 
         avg_response_time = sum(check.response_time_ms for check in checks) / len(checks)
@@ -406,27 +406,25 @@ class HealthCheckManager:
             "status_counts": status_counts,
             "average_response_time_ms": avg_response_time,
             "failed_checks": [
-                check.name for check in checks
+                check.name
+                for check in checks
                 if check.status in [HealthStatus.DEGRADED, HealthStatus.UNHEALTHY]
-            ]
+            ],
         }
 
-    def _store_health_check(self, health: SystemHealth):
+    def _store_health_check(self, health: SystemHealth) -> None:
         """Store health check in history."""
         self.check_history.append(health)
 
         # Keep only the most recent checks
         if len(self.check_history) > self.max_history:
-            self.check_history = self.check_history[-self.max_history:]
+            self.check_history = self.check_history[-self.max_history :]
 
-    def get_health_trends(self, hours: int = 1) -> Dict[str, Any]:
+    def get_health_trends(self, hours: int = 1) -> dict[str, Any]:
         """Get health trends over time."""
 
-        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
-        recent_checks = [
-            health for health in self.check_history
-            if health.timestamp >= cutoff_time
-        ]
+        cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
+        recent_checks = [health for health in self.check_history if health.timestamp >= cutoff_time]
 
         if not recent_checks:
             return {"message": "No recent health data available"}
@@ -435,7 +433,7 @@ class HealthCheckManager:
         status_distribution = {
             "healthy": sum(1 for h in recent_checks if h.status == HealthStatus.HEALTHY),
             "degraded": sum(1 for h in recent_checks if h.status == HealthStatus.DEGRADED),
-            "unhealthy": sum(1 for h in recent_checks if h.status == HealthStatus.UNHEALTHY)
+            "unhealthy": sum(1 for h in recent_checks if h.status == HealthStatus.UNHEALTHY),
         }
 
         avg_response_time = sum(h.response_time_ms for h in recent_checks) / len(recent_checks)
@@ -443,12 +441,16 @@ class HealthCheckManager:
         # Identify most common issues
         failed_check_names = []
         for health in recent_checks:
-            failed_check_names.extend([
-                check.name for check in health.checks
-                if check.status in [HealthStatus.DEGRADED, HealthStatus.UNHEALTHY]
-            ])
+            failed_check_names.extend(
+                [
+                    check.name
+                    for check in health.checks
+                    if check.status in [HealthStatus.DEGRADED, HealthStatus.UNHEALTHY]
+                ]
+            )
 
         from collections import Counter
+
         common_issues = Counter(failed_check_names).most_common(5)
 
         return {
@@ -457,7 +459,7 @@ class HealthCheckManager:
             "status_distribution": status_distribution,
             "average_response_time_ms": avg_response_time,
             "uptime_percentage": (status_distribution["healthy"] / len(recent_checks)) * 100,
-            "most_common_issues": dict(common_issues)
+            "most_common_issues": dict(common_issues),
         }
 
     async def get_readiness_check(self) -> bool:
@@ -466,7 +468,7 @@ class HealthCheckManager:
             # Check critical components only
             db_manager = get_database_manager()
             health_data = await db_manager.health_check()
-            return health_data.get("healthy", False)
+            return bool(health_data.get("healthy", False))
         except:
             return False
 
@@ -480,7 +482,7 @@ class HealthCheckManager:
 
 
 # Global health check manager
-health_manager: Optional[HealthCheckManager] = None
+health_manager: HealthCheckManager | None = None
 
 
 def init_health_checks() -> HealthCheckManager:

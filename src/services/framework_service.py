@@ -3,28 +3,28 @@ Framework service for managing test framework CRUD operations.
 Provides business logic for framework management with proper error handling.
 """
 
-from typing import List, Optional
 from uuid import UUID
 
 import structlog
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
+from ..api.models import FrameworkCreateRequest, FrameworkResponse, FrameworkUpdateRequest
 from ..lib.database import get_session
 from ..models.test_framework import TestFramework
-from ..api.models import FrameworkCreateRequest, FrameworkUpdateRequest, FrameworkResponse
 
 logger = structlog.get_logger()
 
 
 class FrameworkNotFoundError(Exception):
     """Framework not found error."""
+
     pass
 
 
 class FrameworkAlreadyExistsError(Exception):
     """Framework already exists error."""
+
     pass
 
 
@@ -40,7 +40,7 @@ class FrameworkService:
             version=framework.version,
             metadata=framework.config_metadata,
             created_at=framework.created_at,
-            updated_at=framework.updated_at
+            updated_at=framework.updated_at,
         )
 
     @staticmethod
@@ -50,16 +50,13 @@ class FrameworkService:
             # Check if framework with same name/version already exists
             existing = await session.scalar(
                 select(TestFramework).where(
-                    TestFramework.name == request.name,
-                    TestFramework.version == request.version
+                    TestFramework.name == request.name, TestFramework.version == request.version
                 )
             )
 
             if existing:
                 logger.warning(
-                    "Framework already exists",
-                    name=request.name,
-                    version=request.version
+                    "Framework already exists", name=request.name, version=request.version
                 )
                 raise FrameworkAlreadyExistsError(
                     f"Framework '{request.name}' version '{request.version}' already exists"
@@ -67,9 +64,7 @@ class FrameworkService:
 
             # Create new framework - map API fields to database fields
             framework = TestFramework(
-                name=request.name,
-                version=request.version,
-                config_metadata=request.metadata
+                name=request.name, version=request.version, config_metadata=request.metadata
             )
 
             session.add(framework)
@@ -82,7 +77,7 @@ class FrameworkService:
                     "Framework created",
                     framework_id=str(framework.id),
                     name=framework.name,
-                    version=framework.version
+                    version=framework.version,
                 )
 
                 return FrameworkService._convert_to_response(framework)
@@ -95,7 +90,7 @@ class FrameworkService:
                 )
 
     @staticmethod
-    async def get_frameworks() -> List[FrameworkResponse]:
+    async def get_frameworks() -> list[FrameworkResponse]:
         """Get all test frameworks."""
         async with get_session() as session:
             result = await session.execute(select(TestFramework).order_by(TestFramework.created_at))
@@ -118,7 +113,9 @@ class FrameworkService:
             return FrameworkService._convert_to_response(framework)
 
     @staticmethod
-    async def update_framework(framework_id: UUID, request: FrameworkUpdateRequest) -> FrameworkResponse:
+    async def update_framework(
+        framework_id: UUID, request: FrameworkUpdateRequest
+    ) -> FrameworkResponse:
         """Update a test framework."""
         async with get_session() as session:
             framework = await session.get(TestFramework, framework_id)
@@ -133,7 +130,7 @@ class FrameworkService:
                     select(TestFramework).where(
                         TestFramework.name == request.name,
                         TestFramework.version == request.version,
-                        TestFramework.id != framework_id
+                        TestFramework.id != framework_id,
                     )
                 )
 
@@ -142,7 +139,7 @@ class FrameworkService:
                         "Framework update conflict",
                         framework_id=str(framework_id),
                         name=request.name,
-                        version=request.version
+                        version=request.version,
                     )
                     raise FrameworkAlreadyExistsError(
                         f"Framework '{request.name}' version '{request.version}' already exists"
@@ -161,7 +158,7 @@ class FrameworkService:
                     "Framework updated",
                     framework_id=str(framework.id),
                     name=framework.name,
-                    version=framework.version
+                    version=framework.version,
                 )
 
                 return FrameworkService._convert_to_response(framework)
@@ -190,17 +187,16 @@ class FrameworkService:
                 "Framework deleted",
                 framework_id=str(framework_id),
                 name=framework.name,
-                version=framework.version
+                version=framework.version,
             )
 
     @staticmethod
-    async def get_framework_by_name_version(name: str, version: str) -> Optional[FrameworkResponse]:
+    async def get_framework_by_name_version(name: str, version: str) -> FrameworkResponse | None:
         """Get a framework by name and version."""
         async with get_session() as session:
             framework = await session.scalar(
                 select(TestFramework).where(
-                    TestFramework.name == name,
-                    TestFramework.version == version
+                    TestFramework.name == name, TestFramework.version == version
                 )
             )
 
@@ -209,7 +205,7 @@ class FrameworkService:
                     "Retrieved framework by name/version",
                     name=name,
                     version=version,
-                    framework_id=str(framework.id)
+                    framework_id=str(framework.id),
                 )
                 return FrameworkService._convert_to_response(framework)
 

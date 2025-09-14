@@ -10,13 +10,14 @@
 **Testing**: pytest, pytest-asyncio, pytest-minio
 
 ## Recent Changes
+- Feature 002: Comprehensive Development and Production Makefile specification and planning completed
+- Added standardized command interface for all development workflows (type-check, test, build, deploy)
+- Integrated uv dependency management with upgrade capabilities
+- Designed multi-stage Docker builds and container publishing workflow
+- Established TDD approach for Makefile target validation with contract tests
 - Feature 001: Test Results Management API specification completed with S3 storage, real examples, and CI/CD integration
 - Created data model with 5 core entities based on real Playwright and Cypress test result analysis
 - Enhanced TestResult entity with tags, external_id, full_title fields from real examples
-- Designed REST API with comprehensive endpoints including artifact management and bearer token auth
-- Added GitHub Actions CI/CD integration patterns with automation token management
-- OpenAPI schemas updated with realistic example data and CI/CD-focused authentication
-- Comprehensive GitHub Actions workflow examples for Playwright and Cypress integration
 
 ## Project Structure
 ```

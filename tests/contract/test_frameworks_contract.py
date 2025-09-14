@@ -4,9 +4,11 @@ These tests validate API contracts defined in OpenAPI specification.
 Tests must FAIL initially (RED phase) - no implementation exists yet.
 """
 
-import pytest
-from httpx import AsyncClient, ASGITransport
+from datetime import UTC
 from uuid import UUID, uuid4
+
+import pytest
+from httpx import ASGITransport, AsyncClient
 
 # Apply pytest.mark.asyncio to all test methods in this module
 pytestmark = pytest.mark.asyncio
@@ -14,11 +16,12 @@ pytestmark = pytest.mark.asyncio
 
 async def setup_test_client():
     """Set up test client with authentication and database."""
-    from src.main import app
-    from src.lib.middleware import get_current_context, AuthenticatedUser, UserRole
+    from datetime import datetime, timedelta
+
     from src.lib.auth import TokenClaims, TokenScope, TokenType
     from src.lib.database import init_database
-    from datetime import datetime, timedelta, timezone
+    from src.lib.middleware import AuthenticatedUser, UserRole, get_current_context
+    from src.main import app
 
     # Initialize database
     await init_database()
@@ -27,12 +30,12 @@ async def setup_test_client():
     def mock_auth():
         claims = TokenClaims(
             sub="test:user:123",
-            exp=datetime.now(timezone.utc) + timedelta(hours=1),
+            exp=datetime.now(UTC) + timedelta(hours=1),
             scope=TokenScope.USER,
             token_type=TokenType.ACCESS,
             username="testuser",
             email="test@example.com",
-            role=UserRole.ADMIN
+            role=UserRole.ADMIN,
         )
         return AuthenticatedUser(
             user_id="test:user:123",
@@ -40,16 +43,13 @@ async def setup_test_client():
             email="test@example.com",
             role=UserRole.ADMIN,
             permissions=["frameworks:read", "frameworks:write", "frameworks:delete"],
-            token_claims=claims
+            token_claims=claims,
         )
 
     # Override authentication dependencies
     app.dependency_overrides[get_current_context] = mock_auth
 
-    return AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test"
-    )
+    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
 class TestFrameworksContract:
@@ -60,13 +60,11 @@ class TestFrameworksContract:
         client = await setup_test_client()
 
         import random
+
         framework_data = {
             "name": "playwright",
             "version": f"1.55.{random.randint(1000, 9999)}",  # Make version unique but valid semver
-            "metadata": {
-                "actualWorkers": 1,
-                "projects": ["setup", "ipad", "chrome", "firefox"]
-            }
+            "metadata": {"actualWorkers": 1, "projects": ["setup", "ipad", "chrome", "firefox"]},
         }
 
         async with client:
@@ -86,7 +84,7 @@ class TestFrameworksContract:
         """Test POST /api/v1/frameworks with invalid name."""
         framework_data = {
             "name": "PlayWright!",  # Invalid: uppercase and special chars
-            "version": "1.55.0"
+            "version": "1.55.0",
         }
 
         response = await client.post("/api/v1/frameworks", json=framework_data)
@@ -100,7 +98,7 @@ class TestFrameworksContract:
         """Test POST /api/v1/frameworks with invalid version."""
         framework_data = {
             "name": "playwright",
-            "version": "not-a-version"  # Invalid semantic version
+            "version": "not-a-version",  # Invalid semantic version
         }
 
         response = await client.post("/api/v1/frameworks", json=framework_data)
@@ -141,7 +139,7 @@ class TestFrameworksContract:
         framework_data = {
             "name": "cypress",
             "version": "7.2.0",
-            "metadata": {"mocha": {"version": "7.2.0"}}
+            "metadata": {"mocha": {"version": "7.2.0"}},
         }
         create_response = await client.post("/api/v1/frameworks", json=framework_data)
         assert create_response.status_code == 201
@@ -162,10 +160,7 @@ class TestFrameworksContract:
     async def test_get_framework_by_id_success(self, client: AsyncClient):
         """Test GET /api/v1/frameworks/{id} with valid ID."""
         # First create a framework
-        framework_data = {
-            "name": "playwright",
-            "version": "1.55.0"
-        }
+        framework_data = {"name": "playwright", "version": "1.55.0"}
         create_response = await client.post("/api/v1/frameworks", json=framework_data)
         assert create_response.status_code == 201
         created_framework = create_response.json()
@@ -204,10 +199,7 @@ class TestFrameworksContract:
     async def test_update_framework_success(self, client: AsyncClient):
         """Test PUT /api/v1/frameworks/{id} with valid data."""
         # First create a framework
-        framework_data = {
-            "name": "playwright",
-            "version": "1.55.0"
-        }
+        framework_data = {"name": "playwright", "version": "1.55.0"}
         create_response = await client.post("/api/v1/frameworks", json=framework_data)
         assert create_response.status_code == 201
         created_framework = create_response.json()
@@ -217,7 +209,7 @@ class TestFrameworksContract:
         updated_data = {
             "name": "playwright",
             "version": "1.56.0",  # Version update
-            "metadata": {"updated": True}
+            "metadata": {"updated": True},
         }
 
         response = await client.put(f"/api/v1/frameworks/{framework_id}", json=updated_data)
@@ -231,10 +223,7 @@ class TestFrameworksContract:
     async def test_update_framework_not_found(self, client: AsyncClient):
         """Test PUT /api/v1/frameworks/{id} with non-existent ID."""
         non_existent_id = str(uuid4())
-        updated_data = {
-            "name": "playwright",
-            "version": "1.56.0"
-        }
+        updated_data = {"name": "playwright", "version": "1.56.0"}
 
         response = await client.put(f"/api/v1/frameworks/{non_existent_id}", json=updated_data)
 
@@ -246,10 +235,7 @@ class TestFrameworksContract:
     async def test_delete_framework_success(self, client: AsyncClient):
         """Test DELETE /api/v1/frameworks/{id} with valid ID."""
         # First create a framework
-        framework_data = {
-            "name": "playwright",
-            "version": "1.55.0"
-        }
+        framework_data = {"name": "playwright", "version": "1.55.0"}
         create_response = await client.post("/api/v1/frameworks", json=framework_data)
         assert create_response.status_code == 201
         created_framework = create_response.json()
@@ -278,10 +264,7 @@ class TestFrameworksContract:
 
     async def test_create_duplicate_framework(self, client: AsyncClient):
         """Test POST /api/v1/frameworks with duplicate name/version."""
-        framework_data = {
-            "name": "playwright",
-            "version": "1.55.0"
-        }
+        framework_data = {"name": "playwright", "version": "1.55.0"}
 
         # Create first framework
         response1 = await client.post("/api/v1/frameworks", json=framework_data)
@@ -299,7 +282,7 @@ class TestFrameworksContract:
         framework_data = {
             "name": "playwright",
             "version": "1.55.0",
-            "metadata": "invalid-json"  # Should be dict, not string
+            "metadata": "invalid-json",  # Should be dict, not string
         }
 
         response = await client.post("/api/v1/frameworks", json=framework_data)

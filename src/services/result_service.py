@@ -3,29 +3,29 @@ Result service for managing test result CRUD operations.
 Provides business logic for individual test result management with bulk operations.
 """
 
-from typing import List, Optional
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
 
+from ..api.models import ResultCreateRequest, ResultResponse, ResultUpdateRequest
 from ..lib.database import get_session
 from ..models.test_result import TestResult
 from ..models.test_suite import TestSuite
-from ..api.models import ResultCreateRequest, ResultUpdateRequest, ResultResponse
 
 logger = structlog.get_logger()
 
 
 class ResultNotFoundError(Exception):
     """Result not found error."""
+
     pass
 
 
 class ResultValidationError(Exception):
     """Result validation error."""
+
     pass
 
 
@@ -42,12 +42,12 @@ class ResultService:
             status=result.status,
             duration_ms=result.duration_ms,
             error_message=result.error_message,
-            tags=result.tags,
+            tags=result.tags or [],
             external_id=result.external_id,
             full_title=result.full_title,
             metadata=result.config_metadata,
             created_at=result.created_at,
-            updated_at=result.updated_at
+            updated_at=result.updated_at,
         )
 
     @staticmethod
@@ -69,7 +69,7 @@ class ResultService:
                 tags=request.tags,
                 external_id=request.external_id,
                 full_title=request.full_title,
-                config_metadata=request.metadata
+                config_metadata=request.metadata,
             )
 
             session.add(result)
@@ -83,7 +83,7 @@ class ResultService:
                     result_id=str(result.id),
                     name=result.test_name,
                     status=result.status,
-                    suite_id=str(result.suite_id)
+                    suite_id=str(result.suite_id),
                 )
 
                 return ResultService._convert_to_response(result)
@@ -94,7 +94,7 @@ class ResultService:
                 raise ResultValidationError(f"Result creation failed: {str(e)}")
 
     @staticmethod
-    async def create_results_bulk(requests: List[ResultCreateRequest]) -> List[ResultResponse]:
+    async def create_results_bulk(requests: list[ResultCreateRequest]) -> list[ResultResponse]:
         """Create multiple test results in bulk."""
         async with get_session() as session:
             # Validate all suite IDs exist
@@ -120,7 +120,7 @@ class ResultService:
                     tags=request.tags,
                     external_id=request.external_id,
                     full_title=request.full_title,
-                    config_metadata=request.metadata
+                    config_metadata=request.metadata,
                 )
                 results.append(result)
                 session.add(result)
@@ -141,7 +141,7 @@ class ResultService:
                 raise ResultValidationError(f"Bulk result creation failed: {str(e)}")
 
     @staticmethod
-    async def get_results() -> List[ResultResponse]:
+    async def get_results() -> list[ResultResponse]:
         """Get all test results."""
         async with get_session() as session:
             result = await session.execute(
@@ -184,12 +184,12 @@ class ResultService:
             # Update result fields - map API fields to database fields
             result.suite_id = request.suite_id
             result.test_name = request.name
-            result.status = request.status
-            result.duration_ms = request.duration_ms
+            result.status = request.status  # type: ignore[assignment]
+            result.duration_ms = request.duration_ms or 0
             result.error_message = request.error_message
             result.tags = request.tags
             result.external_id = request.external_id
-            result.full_title = request.full_title
+            result.full_title = request.full_title or ""
             result.config_metadata = request.metadata
 
             try:
@@ -200,7 +200,7 @@ class ResultService:
                     "Result updated",
                     result_id=str(result.id),
                     name=result.test_name,
-                    status=result.status
+                    status=result.status,
                 )
 
                 return ResultService._convert_to_response(result)
@@ -223,21 +223,17 @@ class ResultService:
             await session.delete(result)
             await session.commit()
 
-            logger.info(
-                "Result deleted",
-                result_id=str(result_id),
-                name=result.test_name
-            )
+            logger.info("Result deleted", result_id=str(result_id), name=result.test_name)
 
     @staticmethod
     async def get_results_by_filter(
-        suite_id: Optional[UUID] = None,
-        status: Optional[str] = None,
-        name: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        suite_id: UUID | None = None,
+        status: str | None = None,
+        name: str | None = None,
+        tags: list[str] | None = None,
         limit: int = 100,
-        offset: int = 0
-    ) -> List[ResultResponse]:
+        offset: int = 0,
+    ) -> list[ResultResponse]:
         """Get results with filtering and pagination."""
         async with get_session() as session:
             query = select(TestResult)
@@ -249,11 +245,11 @@ class ResultService:
             if status:
                 conditions.append(TestResult.status == status)
             if name:
-                conditions.append(TestResult.name.ilike(f"%{name}%"))
+                conditions.append(TestResult.test_name.ilike(f"%{name}%"))
             if tags:
                 # Check if result has any of the specified tags
                 for tag in tags:
-                    conditions.append(TestResult.tags.any(tag))
+                    conditions.append(TestResult.tags.any(tag))  # type: ignore[arg-type]
 
             if conditions:
                 query = query.where(and_(*conditions))
@@ -271,6 +267,6 @@ class ResultService:
                 suite_id=str(suite_id) if suite_id else None,
                 status=status,
                 name=name,
-                tags=tags
+                tags=tags,
             )
             return [ResultService._convert_to_response(result) for result in results]

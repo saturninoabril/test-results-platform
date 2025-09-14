@@ -4,10 +4,10 @@ Provides UUID primary keys, timestamps, and validation utilities.
 """
 
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict
+from datetime import datetime
+from typing import Any
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -16,7 +16,7 @@ from sqlalchemy.sql import func
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy models."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert model instance to dictionary."""
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 

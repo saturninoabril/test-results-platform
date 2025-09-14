@@ -4,11 +4,11 @@ Provides data models for test frameworks, environments, suites, results, and art
 """
 
 from .base import Base, BaseModel, TimestampMixin, UUIDMixin
-from .test_framework import TestFramework
+from .test_artifact import ArtifactType, TestArtifact
 from .test_environment import TestEnvironment
-from .test_suite import TestSuite
+from .test_framework import TestFramework
 from .test_result import TestResult, TestStatus
-from .test_artifact import TestArtifact, ArtifactType
+from .test_suite import TestSuite
 
 __all__ = [
     "Base",

@@ -3,20 +3,23 @@ Environment API endpoints for test environment management.
 Provides REST API for CRUD operations on test environments.
 """
 
-from typing import List, Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
 
-from ..lib.middleware import RequireEnvironmentsRead, RequireEnvironmentsWrite, RequireEnvironmentsDelete
-from ..services.environment_service import (
-    EnvironmentService,
-    EnvironmentNotFoundError,
-    EnvironmentAlreadyExistsError,
+from ..lib.middleware import (
+    RequireEnvironmentsDelete,
+    RequireEnvironmentsRead,
+    RequireEnvironmentsWrite,
 )
-from .models import EnvironmentCreateRequest, EnvironmentUpdateRequest, EnvironmentResponse
+from ..services.environment_service import (
+    EnvironmentAlreadyExistsError,
+    EnvironmentNotFoundError,
+    EnvironmentService,
+)
+from .models import EnvironmentCreateRequest, EnvironmentResponse, EnvironmentUpdateRequest
 
 logger = structlog.get_logger()
 
@@ -29,7 +32,7 @@ router = APIRouter(prefix="/api/v1/environments", tags=["environments"])
     status_code=status.HTTP_201_CREATED,
     summary="Create a test environment",
     description="Create a new test environment with name, browser, OS, and optional metadata",
-    dependencies=[RequireEnvironmentsWrite]
+    dependencies=[RequireEnvironmentsWrite],
 )
 async def create_environment(request: EnvironmentCreateRequest) -> EnvironmentResponse:
     """Create a new test environment."""
@@ -40,51 +43,46 @@ async def create_environment(request: EnvironmentCreateRequest) -> EnvironmentRe
             environment_id=str(environment.id),
             name=environment.name,
             browser=environment.browser,
-            os=environment.os
+            os=environment.os,
         )
         return environment
 
     except EnvironmentAlreadyExistsError as e:
         logger.warning("Environment creation conflict", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
     except Exception as e:
         logger.error("Environment creation failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error occurred while creating environment"
+            detail="Internal server error occurred while creating environment",
         )
 
 
 @router.get(
     "",
-    response_model=List[EnvironmentResponse],
+    response_model=list[EnvironmentResponse],
     summary="Get environments",
     description="Retrieve a list of test environments with optional filtering",
-    dependencies=[RequireEnvironmentsRead]
+    dependencies=[RequireEnvironmentsRead],
 )
 async def get_environments(
-    name: Optional[str] = Query(None, description="Filter by environment name (partial match)"),
-    browser: Optional[str] = Query(None, description="Filter by browser"),
-    os: Optional[str] = Query(None, description="Filter by OS (partial match)")
-) -> List[EnvironmentResponse]:
+    name: str | None = Query(None, description="Filter by environment name (partial match)"),
+    browser: str | None = Query(None, description="Filter by browser"),
+    os: str | None = Query(None, description="Filter by OS (partial match)"),
+) -> list[EnvironmentResponse]:
     """Get test environments with optional filtering."""
     try:
         if name or browser or os:
             environments = await EnvironmentService.get_environments_by_filter(
-                name=name,
-                browser=browser,
-                os=os
+                name=name, browser=browser, os=os
             )
             logger.debug(
                 "Filtered environments retrieved via API",
                 count=len(environments),
                 name=name,
                 browser=browser,
-                os=os
+                os=os,
             )
         else:
             environments = await EnvironmentService.get_environments()
@@ -96,7 +94,7 @@ async def get_environments(
         logger.error("Environment retrieval failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error occurred while retrieving environments"
+            detail="Internal server error occurred while retrieving environments",
         )
 
 
@@ -105,7 +103,7 @@ async def get_environments(
     response_model=EnvironmentResponse,
     summary="Get an environment by ID",
     description="Retrieve a specific test environment by its UUID",
-    dependencies=[RequireEnvironmentsRead]
+    dependencies=[RequireEnvironmentsRead],
 )
 async def get_environment(environment_id: UUID) -> EnvironmentResponse:
     """Get a test environment by ID."""
@@ -116,16 +114,15 @@ async def get_environment(environment_id: UUID) -> EnvironmentResponse:
 
     except EnvironmentNotFoundError as e:
         logger.warning("Environment not found via API", environment_id=str(environment_id))
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
     except Exception as e:
-        logger.error("Environment retrieval failed", environment_id=str(environment_id), error=str(e))
+        logger.error(
+            "Environment retrieval failed", environment_id=str(environment_id), error=str(e)
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error occurred while retrieving environment"
+            detail="Internal server error occurred while retrieving environment",
         )
 
 
@@ -134,9 +131,11 @@ async def get_environment(environment_id: UUID) -> EnvironmentResponse:
     response_model=EnvironmentResponse,
     summary="Update an environment",
     description="Update an existing test environment's details",
-    dependencies=[RequireEnvironmentsWrite]
+    dependencies=[RequireEnvironmentsWrite],
 )
-async def update_environment(environment_id: UUID, request: EnvironmentUpdateRequest) -> EnvironmentResponse:
+async def update_environment(
+    environment_id: UUID, request: EnvironmentUpdateRequest
+) -> EnvironmentResponse:
     """Update a test environment."""
     try:
         environment = await EnvironmentService.update_environment(environment_id, request)
@@ -145,29 +144,27 @@ async def update_environment(environment_id: UUID, request: EnvironmentUpdateReq
             environment_id=str(environment_id),
             name=environment.name,
             browser=environment.browser,
-            os=environment.os
+            os=environment.os,
         )
         return environment
 
     except EnvironmentNotFoundError as e:
-        logger.warning("Environment not found for update via API", environment_id=str(environment_id))
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
+        logger.warning(
+            "Environment not found for update via API", environment_id=str(environment_id)
         )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
     except EnvironmentAlreadyExistsError as e:
-        logger.warning("Environment update conflict", environment_id=str(environment_id), error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e)
+        logger.warning(
+            "Environment update conflict", environment_id=str(environment_id), error=str(e)
         )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
     except Exception as e:
         logger.error("Environment update failed", environment_id=str(environment_id), error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error occurred while updating environment"
+            detail="Internal server error occurred while updating environment",
         )
 
 
@@ -176,7 +173,7 @@ async def update_environment(environment_id: UUID, request: EnvironmentUpdateReq
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete an environment",
     description="Delete a test environment by its UUID",
-    dependencies=[RequireEnvironmentsDelete]
+    dependencies=[RequireEnvironmentsDelete],
 )
 async def delete_environment(environment_id: UUID) -> Response:
     """Delete a test environment."""
@@ -186,15 +183,16 @@ async def delete_environment(environment_id: UUID) -> Response:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     except EnvironmentNotFoundError as e:
-        logger.warning("Environment not found for deletion via API", environment_id=str(environment_id))
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
+        logger.warning(
+            "Environment not found for deletion via API", environment_id=str(environment_id)
         )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
     except Exception as e:
-        logger.error("Environment deletion failed", environment_id=str(environment_id), error=str(e))
+        logger.error(
+            "Environment deletion failed", environment_id=str(environment_id), error=str(e)
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error occurred while deleting environment"
+            detail="Internal server error occurred while deleting environment",
         )

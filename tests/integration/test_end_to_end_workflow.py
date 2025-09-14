@@ -5,10 +5,11 @@ Tests complete workflows from framework creation through artifact management.
 
 import io
 import json
-import pytest
-from typing import Dict, Any
-from httpx import AsyncClient, ASGITransport
+from datetime import UTC
 from uuid import uuid4
+
+import pytest
+from httpx import ASGITransport, AsyncClient
 
 # Apply pytest.mark.asyncio to all test methods in this module
 pytestmark = pytest.mark.asyncio
@@ -16,12 +17,13 @@ pytestmark = pytest.mark.asyncio
 
 async def setup_test_client():
     """Set up test client with authentication and database."""
-    from src.main import app
-    from src.lib.middleware import get_current_context, AuthenticatedUser, UserRole
+    from datetime import datetime, timedelta
+
     from src.lib.auth import TokenClaims, TokenScope, TokenType
     from src.lib.database import init_database
+    from src.lib.middleware import AuthenticatedUser, UserRole, get_current_context
     from src.lib.storage import init_storage
-    from datetime import datetime, timedelta, timezone
+    from src.main import app
 
     # Initialize services
     await init_database()
@@ -31,47 +33,54 @@ async def setup_test_client():
     def mock_auth():
         claims = TokenClaims(
             sub="test:user:e2e",
-            exp=datetime.now(timezone.utc) + timedelta(hours=1),
+            exp=datetime.now(UTC) + timedelta(hours=1),
             scope=TokenScope.USER,
             token_type=TokenType.ACCESS,
             username="e2euser",
             email="e2e@example.com",
-            role=UserRole.ADMIN
+            role=UserRole.ADMIN,
         )
         return AuthenticatedUser(
             user_id="test:user:e2e",
             username="e2euser",
             email="e2e@example.com",
             role=UserRole.ADMIN,
-            permissions=["frameworks:read", "frameworks:write", "frameworks:delete",
-                        "environments:read", "environments:write", "environments:delete",
-                        "suites:read", "suites:write", "suites:delete",
-                        "results:read", "results:write", "results:delete",
-                        "artifacts:read", "artifacts:write", "artifacts:delete"],
-            token_claims=claims
+            permissions=[
+                "frameworks:read",
+                "frameworks:write",
+                "frameworks:delete",
+                "environments:read",
+                "environments:write",
+                "environments:delete",
+                "suites:read",
+                "suites:write",
+                "suites:delete",
+                "results:read",
+                "results:write",
+                "results:delete",
+                "artifacts:read",
+                "artifacts:write",
+                "artifacts:delete",
+            ],
+            token_claims=claims,
         )
 
     # Override authentication dependencies
     app.dependency_overrides[get_current_context] = mock_auth
 
-    return AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://testserver"
-    )
+    return AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
 
 
 @pytest.fixture
 def sample_framework_data():
     """Sample framework data for testing."""
     import time
+
     timestamp = int(time.time()) % 10000  # Use timestamp for uniqueness
     return {
         "name": "pytest",
         "version": f"7.4.{timestamp}",
-        "metadata": {
-            "plugins": ["pytest-asyncio", "pytest-minio"],
-            "python_version": "3.13"
-        }
+        "metadata": {"plugins": ["pytest-asyncio", "pytest-minio"], "python_version": "3.13"},
     }
 
 
@@ -82,11 +91,7 @@ def sample_environment_data():
         "name": f"ci-environment-{uuid4().hex[:8]}",
         "browser": "chrome",
         "os": "ubuntu",
-        "config_metadata": {
-            "ci": True,
-            "headless": True,
-            "viewport": "1920x1080"
-        }
+        "config_metadata": {"ci": True, "headless": True, "viewport": "1920x1080"},
     }
 
 
@@ -100,10 +105,7 @@ def sample_suite_data():
         "failed_count": 1,
         "skipped_count": 0,
         "duration_ms": 120500,  # Convert to milliseconds
-        "metadata": {
-            "parallel": True,
-            "workers": 4
-        }
+        "metadata": {"parallel": True, "workers": 4},
     }
 
 
@@ -123,17 +125,14 @@ def sample_result_data():
             "steps": [
                 {"action": "navigate", "target": "/register"},
                 {"action": "fill", "target": "email", "value": "test@example.com"},
-                {"action": "click", "target": "submit"}
-            ]
-        }
+                {"action": "click", "target": "submit"},
+            ],
+        },
     }
 
 
 async def test_complete_test_results_workflow(
-    sample_framework_data,
-    sample_environment_data,
-    sample_suite_data,
-    sample_result_data
+    sample_framework_data, sample_environment_data, sample_suite_data, sample_result_data
 ):
     """Test the complete workflow from framework creation to test results."""
     client = await setup_test_client()
@@ -148,7 +147,9 @@ async def test_complete_test_results_workflow(
         framework_id = framework_response.json()["id"]
 
         # Step 2: Create environment
-        environment_response = await client.post("/api/v1/environments", json=sample_environment_data)
+        environment_response = await client.post(
+            "/api/v1/environments", json=sample_environment_data
+        )
         assert environment_response.status_code == 201
         environment_id = environment_response.json()["id"]
 
@@ -156,7 +157,7 @@ async def test_complete_test_results_workflow(
         suite_data = {
             **sample_suite_data,
             "framework_id": framework_id,
-            "environment_id": environment_id
+            "environment_id": environment_id,
         }
         suite_response = await client.post("/api/v1/suites", json=suite_data)
         if suite_response.status_code != 201:
@@ -167,10 +168,7 @@ async def test_complete_test_results_workflow(
         suite_id = suite_response.json()["id"]
 
         # Step 4: Create test results
-        result_data = {
-            **sample_result_data,
-            "suite_id": suite_id
-        }
+        result_data = {**sample_result_data, "suite_id": suite_id}
         result_response = await client.post("/api/v1/results", json=result_data)
         if result_response.status_code != 201:
             print(f"Result creation failed: {result_response.status_code}")
@@ -202,10 +200,7 @@ async def test_complete_test_results_workflow(
 
 
 async def test_artifact_management_workflow(
-    sample_framework_data,
-    sample_environment_data,
-    sample_suite_data,
-    sample_result_data
+    sample_framework_data, sample_environment_data, sample_suite_data, sample_result_data
 ):
     """Test complete artifact management workflow."""
     client = await setup_test_client()
@@ -215,10 +210,16 @@ async def test_artifact_management_workflow(
         framework_response = await client.post("/api/v1/frameworks", json=sample_framework_data)
         framework_id = framework_response.json()["id"]
 
-        environment_response = await client.post("/api/v1/environments", json=sample_environment_data)
+        environment_response = await client.post(
+            "/api/v1/environments", json=sample_environment_data
+        )
         environment_id = environment_response.json()["id"]
 
-        suite_data = {**sample_suite_data, "framework_id": framework_id, "environment_id": environment_id}
+        suite_data = {
+            **sample_suite_data,
+            "framework_id": framework_id,
+            "environment_id": environment_id,
+        }
         suite_response = await client.post("/api/v1/suites", json=suite_data)
         suite_id = suite_response.json()["id"]
 
@@ -233,8 +234,8 @@ async def test_artifact_management_workflow(
             files={"file": ("screenshot.png", io.BytesIO(screenshot_data), "image/png")},
             data={
                 "artifact_type": "screenshot",
-                "metadata": json.dumps({"step": "login", "viewport": "1920x1080"})
-            }
+                "metadata": json.dumps({"step": "login", "viewport": "1920x1080"}),
+            },
         )
         assert screenshot_response.status_code == 201
         screenshot_artifact = screenshot_response.json()
@@ -245,10 +246,7 @@ async def test_artifact_management_workflow(
         video_response = await client.post(
             f"/api/v1/results/{result_id}/artifacts",
             files={"file": ("test-video.mp4", io.BytesIO(video_data), "video/mp4")},
-            data={
-                "artifact_type": "video",
-                "metadata": json.dumps({"duration": 30.5, "fps": 30})
-            }
+            data={"artifact_type": "video", "metadata": json.dumps({"duration": 30.5, "fps": 30})},
         )
         assert video_response.status_code == 201
         video_artifact = video_response.json()
@@ -285,9 +283,7 @@ async def test_artifact_management_workflow(
 
 
 async def test_bulk_operations_workflow(
-    sample_framework_data,
-    sample_environment_data,
-    sample_suite_data
+    sample_framework_data, sample_environment_data, sample_suite_data
 ):
     """Test bulk operations workflow."""
     client = await setup_test_client()
@@ -297,7 +293,9 @@ async def test_bulk_operations_workflow(
         framework_response = await client.post("/api/v1/frameworks", json=sample_framework_data)
         framework_id = framework_response.json()["id"]
 
-        environment_response = await client.post("/api/v1/environments", json=sample_environment_data)
+        environment_response = await client.post(
+            "/api/v1/environments", json=sample_environment_data
+        )
         environment_id = environment_response.json()["id"]
 
         # Create multiple test suites
@@ -311,7 +309,7 @@ async def test_bulk_operations_workflow(
                 "total_count": 10 + i,
                 "passed_count": 8 + i,
                 "failed_count": 2 - i if i < 2 else 0,
-                "skipped_count": 0
+                "skipped_count": 0,
             }
             suite_response = await client.post("/api/v1/suites", json=suite_data)
             assert suite_response.status_code == 201
@@ -327,7 +325,7 @@ async def test_bulk_operations_workflow(
                     "duration_ms": int((10.0 + j) * 1000),  # Convert to milliseconds
                     "suite_id": suite_id,
                     "external_id": f"bulk-test-{suite_id}-{j}",
-                    "tags": ["bulk", f"suite-{suite_id}"]
+                    "tags": ["bulk", f"suite-{suite_id}"],
                 }
                 result_response = await client.post("/api/v1/results", json=result_data)
                 assert result_response.status_code == 201
@@ -341,7 +339,7 @@ async def test_bulk_operations_workflow(
         assert len(framework_json) >= 6  # At least 3 suites × 2 results each
 
         # Query results by status
-        passed_results = await client.get(f"/api/v1/results?status=passed")
+        passed_results = await client.get("/api/v1/results?status=passed")
         assert passed_results.status_code == 200
         passed_json = passed_results.json()
         passed_count = len([r for r in passed_json if r["status"] == "passed"])
@@ -368,9 +366,7 @@ async def test_bulk_operations_workflow(
 
 
 async def test_error_handling_workflow(
-    sample_framework_data,
-    sample_environment_data,
-    sample_suite_data
+    sample_framework_data, sample_environment_data, sample_suite_data
 ):
     """Test error handling across the workflow."""
     client = await setup_test_client()
@@ -382,7 +378,9 @@ async def test_error_handling_workflow(
         assert framework_response.status_code == 422
 
         # Create valid framework for further tests
-        valid_framework_response = await client.post("/api/v1/frameworks", json=sample_framework_data)
+        valid_framework_response = await client.post(
+            "/api/v1/frameworks", json=sample_framework_data
+        )
         framework_id = valid_framework_response.json()["id"]
 
         # Test invalid environment creation
@@ -398,7 +396,7 @@ async def test_error_handling_workflow(
         invalid_suite = {
             **sample_suite_data,
             "framework_id": "non-existent-id",
-            "environment_id": environment_id
+            "environment_id": environment_id,
         }
         suite_response = await client.post("/api/v1/suites", json=invalid_suite)
         assert suite_response.status_code in [404, 422]
@@ -412,12 +410,14 @@ async def test_error_handling_workflow(
         artifact_response = await client.post(
             "/api/v1/results/non-existent-id/artifacts",
             files={"file": ("test.png", io.BytesIO(artifact_data), "image/png")},
-            data={"artifact_type": "screenshot"}
+            data={"artifact_type": "screenshot"},
         )
         assert artifact_response.status_code == 404
 
         # Test duplicate framework creation
-        duplicate_framework_response = await client.post("/api/v1/frameworks", json=sample_framework_data)
+        duplicate_framework_response = await client.post(
+            "/api/v1/frameworks", json=sample_framework_data
+        )
         assert duplicate_framework_response.status_code == 409
 
     finally:
@@ -425,12 +425,11 @@ async def test_error_handling_workflow(
 
 
 async def test_performance_workflow(
-    sample_framework_data,
-    sample_environment_data,
-    sample_suite_data
+    sample_framework_data, sample_environment_data, sample_suite_data
 ):
     """Test performance characteristics of the workflow."""
     import time
+
     client = await setup_test_client()
 
     try:
@@ -438,7 +437,9 @@ async def test_performance_workflow(
         framework_response = await client.post("/api/v1/frameworks", json=sample_framework_data)
         framework_id = framework_response.json()["id"]
 
-        environment_response = await client.post("/api/v1/environments", json=sample_environment_data)
+        environment_response = await client.post(
+            "/api/v1/environments", json=sample_environment_data
+        )
         environment_id = environment_response.json()["id"]
 
         # Test suite creation performance
@@ -449,7 +450,7 @@ async def test_performance_workflow(
                 **sample_suite_data,
                 "name": f"{sample_suite_data['name']}-perf-{i}",
                 "framework_id": framework_id,
-                "environment_id": environment_id
+                "environment_id": environment_id,
             }
 
             start_time = time.time()
@@ -465,7 +466,7 @@ async def test_performance_workflow(
         p95_creation_time = sorted(suite_creation_times)[int(0.95 * len(suite_creation_times))]
 
         assert avg_creation_time < 1.0  # 1 second average (relaxed for integration test)
-        assert p95_creation_time < 2.0   # 2 seconds p95 (relaxed for integration test)
+        assert p95_creation_time < 2.0  # 2 seconds p95 (relaxed for integration test)
 
         # Test bulk query performance
         query_start = time.time()

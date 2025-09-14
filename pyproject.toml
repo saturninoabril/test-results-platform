@@ -7,16 +7,16 @@ name = "test-results-api"
 version = "0.4.0"
 description = "REST API for managing test execution results from end-to-end testing frameworks"
 # readme = "README.md"
-license = "MIT"
+license = "GPL-3.0"
 requires-python = ">=3.13"
 authors = [
-    { name = "Test Results API Team" },
+    { name = "@saturninoabril" },
 ]
 keywords = ["api", "testing", "playwright", "cypress", "fastapi"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
     "Framework :: FastAPI",
@@ -25,55 +25,50 @@ classifiers = [
 
 dependencies = [
     # Core FastAPI dependencies
-    "fastapi[standard]>=0.104.0",
-    "uvicorn[standard]>=0.24.0",
-    "pydantic>=2.5.0",
-    "pydantic-settings>=2.1.0",
-
+    "fastapi==0.116.1",
+    "uvicorn[standard]==0.35.0",
+    "pydantic==2.11.9",
+    "pydantic-settings==2.10.1",
     # Database dependencies
-    "sqlalchemy[asyncio]>=2.0.0",
-    "alembic>=1.13.0",
-    "asyncpg>=0.29.0",  # PostgreSQL async driver
-    "psycopg2-binary>=2.9.0",  # PostgreSQL sync driver for migrations
-
+    "sqlalchemy[asyncio]==2.0.43",
+    "alembic==1.16.5",
+    "asyncpg==0.30.0", # PostgreSQL async driver
+    "psycopg2-binary==2.9.10", # PostgreSQL sync driver for migrations
     # Authentication dependencies
-    "pyjwt[crypto]>=2.8.0",
-    "httpx>=0.25.0",  # For GitHub OAuth
-    "python-multipart>=0.0.6",  # For form data
-
+    "pyjwt[crypto]==2.10.1",
+    "httpx==0.28.1", # For GitHub OAuth
+    "python-multipart==0.0.20", # For form data
     # Storage dependencies
-    "aioboto3>=12.0.0",  # S3-compatible storage
-    "minio>=7.2.0",  # MinIO client
-
+    "aioboto3==15.1.0", # S3-compatible storage
+    "minio==7.2.16", # MinIO client
     # Utility dependencies
-    "python-dotenv>=1.0.0",
-    "structlog>=23.0.0",  # Structured logging
-
+    "python-dotenv==1.1.1",
+    "structlog==25.4.0", # Structured logging
     # CLI dependencies
-    "click>=8.1.0",
-    "rich>=13.0.0",  # CLI formatting
+    "click==8.2.1",
+    "rich==14.1.0", # CLI formatting
 ]
 
 [project.optional-dependencies]
 dev = [
     # Testing dependencies
-    "pytest>=7.4.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.1.0",
-    "pytest-xdist>=3.3.0",
-    "httpx>=0.25.0",  # For test client
+    "pytest==8.4.2",
+    "pytest-asyncio==1.2.0",
+    "pytest-cov==7.0.0",
+    "pytest-xdist==3.8.0",
+    "httpx==0.28.1",  # For test client
 
     # Development tools
-    "ruff>=0.1.0",  # Linting and formatting
-    "mypy>=1.7.0",  # Type checking
-    "pre-commit>=3.5.0",
+    "ruff==0.13.0",  # Linting and formatting
+    "mypy==1.18.1",  # Type checking
+    "pre-commit==4.3.0",
 
     # Database testing
-    "pytest-postgresql>=5.0.0",
+    "pytest-postgresql==7.0.2",
 
     # Documentation
-    "mkdocs>=1.5.0",
-    "mkdocs-material>=9.4.0",
+    "mkdocs==1.6.1",
+    "mkdocs-material==9.6.19",
 ]
 
 [project.scripts]
