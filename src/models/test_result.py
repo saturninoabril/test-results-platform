@@ -3,12 +3,19 @@ TestResult model for individual test execution outcomes.
 Represents a single test execution with status, timing, and error details.
 """
 
-from enum import Enum
-from typing import Dict, Any, Optional, List
-import uuid
+from __future__ import annotations
 
-from sqlalchemy import String, Integer, Text, ForeignKey, Index, CheckConstraint, Enum as SQLEnum
-from sqlalchemy.dialects.postgresql import JSONB, UUID, ARRAY
+import uuid
+from enum import Enum
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .test_artifact import TestArtifact
+    from .test_suite import TestSuite
+
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from .base import BaseModel
@@ -16,6 +23,7 @@ from .base import BaseModel
 
 class TestStatus(str, Enum):
     """Test execution status enumeration."""
+
     PASSED = "passed"
     FAILED = "failed"
     SKIPPED = "skipped"
@@ -59,13 +67,13 @@ class TestResult(BaseModel):
         comment="Test execution time in milliseconds",
     )
 
-    error_message: Mapped[Optional[str]] = mapped_column(
+    error_message: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Error message if test failed",
     )
 
-    stack_trace: Mapped[Optional[str]] = mapped_column(
+    stack_trace: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Stack trace for failed tests",
@@ -78,19 +86,19 @@ class TestResult(BaseModel):
         comment="Number of retry attempts",
     )
 
-    tags: Mapped[Optional[List[str]]] = mapped_column(
+    tags: Mapped[list[str] | None] = mapped_column(
         ARRAY(String(100)),
         nullable=True,
         comment="Test tags and annotations",
     )
 
-    external_id: Mapped[Optional[str]] = mapped_column(
+    external_id: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
         comment="Framework-specific test identifier",
     )
 
-    config_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    config_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Test-specific metadata and configuration",
@@ -98,16 +106,11 @@ class TestResult(BaseModel):
 
     # Relationships
     suite: Mapped["TestSuite"] = relationship(
-        "TestSuite",
-        back_populates="test_results",
-        lazy="select"
+        "TestSuite", back_populates="test_results", lazy="select"
     )
 
     test_artifacts: Mapped[list["TestArtifact"]] = relationship(
-        "TestArtifact",
-        back_populates="test_result",
-        cascade="all, delete-orphan",
-        lazy="select"
+        "TestArtifact", back_populates="test_result", cascade="all, delete-orphan", lazy="select"
     )
 
     # Constraints and indexes
@@ -163,7 +166,7 @@ class TestResult(BaseModel):
         return retry_count
 
     @validates("tags")
-    def validate_tags(self, key: str, tags: Optional[List[str]]) -> Optional[List[str]]:
+    def validate_tags(self, key: str, tags: list[str] | None) -> list[str] | None:
         """Validate tags array."""
         if tags is None:
             return None
@@ -192,7 +195,7 @@ class TestResult(BaseModel):
         return validated_tags if validated_tags else None
 
     @validates("external_id")
-    def validate_external_id(self, key: str, external_id: Optional[str]) -> Optional[str]:
+    def validate_external_id(self, key: str, external_id: str | None) -> str | None:
         """Validate external ID format."""
         if external_id is None:
             return None
@@ -207,7 +210,9 @@ class TestResult(BaseModel):
         return external_id
 
     @validates("config_metadata")
-    def validate_config_metadata(self, key: str, config_metadata: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def validate_config_metadata(
+        self, key: str, config_metadata: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
         """Validate config_metadata is a proper dictionary."""
         if config_metadata is None:
             return None

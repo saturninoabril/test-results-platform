@@ -3,24 +3,17 @@ Integration tests for complete user workflows with real PostgreSQL.
 Tests data consistency across related entities and realistic data volumes.
 """
 
-import pytest
 import asyncio
-from typing import List
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from httpx import AsyncClient, ASGITransport
+import pytest
+from httpx import ASGITransport, AsyncClient
 
-from src.main import app
-from src.lib.database import init_database, close_database
-from src.lib.middleware import get_current_context, AuthenticatedUser, UserRole
 from src.lib.auth import TokenClaims, TokenScope, TokenType
-from src.api.models import (
-    FrameworkCreateRequest,
-    EnvironmentCreateRequest,
-    SuiteCreateRequest,
-    ResultCreateRequest,
-)
+from src.lib.database import close_database, init_database
+from src.lib.middleware import AuthenticatedUser, UserRole, get_current_context
+from src.main import app
 
 # Apply pytest.mark.asyncio to all test methods in this module
 pytestmark = pytest.mark.asyncio
@@ -36,16 +29,17 @@ async def setup_database():
 
 async def setup_test_client():
     """Set up test client with authentication and database."""
+
     # Mock authentication for integration tests
     def mock_auth():
         claims = TokenClaims(
             sub="integration:user:123",
-            exp=datetime.now(timezone.utc) + timedelta(hours=1),
+            exp=datetime.now(UTC) + timedelta(hours=1),
             scope=TokenScope.USER,
             token_type=TokenType.ACCESS,
             username="integration_user",
             email="integration@example.com",
-            role=UserRole.ADMIN
+            role=UserRole.ADMIN,
         )
         return AuthenticatedUser(
             user_id="integration:user:123",
@@ -53,22 +47,29 @@ async def setup_test_client():
             email="integration@example.com",
             role=UserRole.ADMIN,
             permissions=[
-                "frameworks:read", "frameworks:write", "frameworks:delete",
-                "environments:read", "environments:write", "environments:delete",
-                "suites:read", "suites:write", "suites:delete",
-                "results:read", "results:write", "results:delete",
-                "artifacts:read", "artifacts:write", "artifacts:delete"
+                "frameworks:read",
+                "frameworks:write",
+                "frameworks:delete",
+                "environments:read",
+                "environments:write",
+                "environments:delete",
+                "suites:read",
+                "suites:write",
+                "suites:delete",
+                "results:read",
+                "results:write",
+                "results:delete",
+                "artifacts:read",
+                "artifacts:write",
+                "artifacts:delete",
             ],
-            token_claims=claims
+            token_claims=claims,
         )
 
     # Override authentication dependencies
     app.dependency_overrides[get_current_context] = mock_auth
 
-    return AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test"
-    )
+    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
 class TestCompleteWorkflows:
@@ -86,8 +87,8 @@ class TestCompleteWorkflows:
                 "version": f"1.55.{uuid4().hex[:8]}",
                 "metadata": {
                     "actualWorkers": 4,
-                    "projects": ["setup", "chrome", "firefox", "webkit"]
-                }
+                    "projects": ["setup", "chrome", "firefox", "webkit"],
+                },
             }
 
             framework_response = await client.post("/api/v1/frameworks", json=framework_data)
@@ -102,10 +103,7 @@ class TestCompleteWorkflows:
                 "name": f"{browser}-desktop",
                 "browser": browser,
                 "os": "linux",
-                "metadata": {
-                    "viewport": "1920x1080",
-                    "deviceScaleFactor": 1
-                }
+                "metadata": {"viewport": "1920x1080", "deviceScaleFactor": 1},
             }
             env_response = await client.post("/api/v1/environments", json=env_data)
             assert env_response.status_code == 201
@@ -123,11 +121,7 @@ class TestCompleteWorkflows:
                 "failed_count": 3,
                 "skipped_count": 2,
                 "duration_ms": 125000 + (len(suites) * 5000),  # Vary duration
-                "metadata": {
-                    "browser": env["browser"],
-                    "retries": 2,
-                    "parallel": True
-                }
+                "metadata": {"browser": env["browser"], "retries": 2, "parallel": True},
             }
             suite_response = await client.post("/api/v1/suites", json=suite_data)
             assert suite_response.status_code == 201
@@ -136,13 +130,38 @@ class TestCompleteWorkflows:
         # Step 4: Create individual test results for each suite
         all_results = []
         test_scenarios = [
-            {"name": "user-login", "status": "passed", "duration_ms": 2500, "tags": ["auth", "critical"]},
-            {"name": "product-search", "status": "passed", "duration_ms": 1800, "tags": ["search", "e2e"]},
-            {"name": "checkout-flow", "status": "failed", "duration_ms": 5200, "tags": ["checkout", "critical"],
-             "error_message": "Payment form validation failed"},
-            {"name": "user-profile", "status": "passed", "duration_ms": 1200, "tags": ["profile", "user"]},
-            {"name": "admin-dashboard", "status": "skipped", "duration_ms": 0, "tags": ["admin"],
-             "error_message": "Admin user not available"}
+            {
+                "name": "user-login",
+                "status": "passed",
+                "duration_ms": 2500,
+                "tags": ["auth", "critical"],
+            },
+            {
+                "name": "product-search",
+                "status": "passed",
+                "duration_ms": 1800,
+                "tags": ["search", "e2e"],
+            },
+            {
+                "name": "checkout-flow",
+                "status": "failed",
+                "duration_ms": 5200,
+                "tags": ["checkout", "critical"],
+                "error_message": "Payment form validation failed",
+            },
+            {
+                "name": "user-profile",
+                "status": "passed",
+                "duration_ms": 1200,
+                "tags": ["profile", "user"],
+            },
+            {
+                "name": "admin-dashboard",
+                "status": "skipped",
+                "duration_ms": 0,
+                "tags": ["admin"],
+                "error_message": "Admin user not available",
+            },
         ]
 
         for suite in suites:
@@ -159,8 +178,8 @@ class TestCompleteWorkflows:
                     "full_title": f"E2E Tests > {scenario['name']}",
                     "metadata": {
                         "browser": suite["metadata"]["browser"],
-                        "retry_count": 0 if scenario["status"] == "passed" else 1
-                    }
+                        "retry_count": 0 if scenario["status"] == "passed" else 1,
+                    },
                 }
                 result_response = await client.post("/api/v1/results", json=result_data)
                 assert result_response.status_code == 201
@@ -208,7 +227,7 @@ class TestCompleteWorkflows:
         assert stats["total_suites"] == 3
         assert stats["total_tests"] == 75  # 25 tests × 3 suites
         assert stats["total_passed"] == 60  # 20 passed × 3 suites
-        assert stats["total_failed"] == 9   # 3 failed × 3 suites
+        assert stats["total_failed"] == 9  # 3 failed × 3 suites
         assert stats["total_skipped"] == 6  # 2 skipped × 3 suites
 
         # Step 6: Test filtering and search capabilities
@@ -237,7 +256,7 @@ class TestCompleteWorkflows:
         framework_data = {
             "name": "cypress",
             "version": f"7.2.{uuid4().hex[:8]}",
-            "metadata": {"mocha": {"version": "7.2.0"}}
+            "metadata": {"mocha": {"version": "7.2.0"}},
         }
         framework_response = await client.post("/api/v1/frameworks", json=framework_data)
         assert framework_response.status_code == 201
@@ -247,7 +266,7 @@ class TestCompleteWorkflows:
             "name": "bulk-test-env",
             "browser": "chrome",
             "os": "ubuntu",
-            "metadata": {"headless": True}
+            "metadata": {"headless": True},
         }
         env_response = await client.post("/api/v1/environments", json=env_data)
         assert env_response.status_code == 201
@@ -263,7 +282,7 @@ class TestCompleteWorkflows:
             "failed_count": 10,
             "skipped_count": 5,
             "duration_ms": 300000,
-            "metadata": {"bulk_test": True}
+            "metadata": {"bulk_test": True},
         }
         suite_response = await client.post("/api/v1/suites", json=suite_data)
         assert suite_response.status_code == 201
@@ -284,12 +303,13 @@ class TestCompleteWorkflows:
                 "tags": ["bulk", "performance"] + (["slow"] if i % 10 == 0 else []),
                 "external_id": f"bulk-{i:03d}",
                 "full_title": f"Bulk Performance Tests > bulk-test-{i:03d}",
-                "metadata": {"test_number": i, "batch": i // 10}
+                "metadata": {"test_number": i, "batch": i // 10},
             }
             bulk_results.append(result_data)
 
         # Test bulk creation
         import time
+
         start_time = time.time()
 
         bulk_response = await client.post("/api/v1/results/bulk", json=bulk_results)
@@ -312,18 +332,24 @@ class TestCompleteWorkflows:
         assert len(suite_results) == 100
 
         # Test filtering on large dataset
-        failed_results_response = await client.get(f"/api/v1/results?suite_id={suite['id']}&status=failed")
+        failed_results_response = await client.get(
+            f"/api/v1/results?suite_id={suite['id']}&status=failed"
+        )
         assert failed_results_response.status_code == 200
         failed_results = failed_results_response.json()
         assert len(failed_results) == 10
 
         # Test pagination
-        paginated_response = await client.get(f"/api/v1/results?suite_id={suite['id']}&limit=25&offset=0")
+        paginated_response = await client.get(
+            f"/api/v1/results?suite_id={suite['id']}&limit=25&offset=0"
+        )
         assert paginated_response.status_code == 200
         page1_results = paginated_response.json()
         assert len(page1_results) == 25
 
-        paginated_response = await client.get(f"/api/v1/results?suite_id={suite['id']}&limit=25&offset=25")
+        paginated_response = await client.get(
+            f"/api/v1/results?suite_id={suite['id']}&limit=25&offset=25"
+        )
         assert paginated_response.status_code == 200
         page2_results = paginated_response.json()
         assert len(page2_results) == 25
@@ -339,7 +365,7 @@ class TestCompleteWorkflows:
         framework_data = {
             "name": "jest",
             "version": f"28.1.{uuid4().hex[:8]}",
-            "metadata": {"testEnvironment": "node"}
+            "metadata": {"testEnvironment": "node"},
         }
         framework_response = await client.post("/api/v1/frameworks", json=framework_data)
         assert framework_response.status_code == 201
@@ -349,7 +375,7 @@ class TestCompleteWorkflows:
             "name": "node-environment",
             "browser": None,
             "os": "linux",
-            "metadata": {"node_version": "18.17.0"}
+            "metadata": {"node_version": "18.17.0"},
         }
         env_response = await client.post("/api/v1/environments", json=env_data)
         assert env_response.status_code == 201
@@ -364,7 +390,7 @@ class TestCompleteWorkflows:
             "failed_count": 2,
             "skipped_count": 0,
             "duration_ms": 15000,
-            "metadata": {"test_type": "unit"}
+            "metadata": {"test_type": "unit"},
         }
         suite_response = await client.post("/api/v1/suites", json=suite_data)
         assert suite_response.status_code == 201
@@ -378,7 +404,7 @@ class TestCompleteWorkflows:
             "total_count": 1,
             "passed_count": 1,
             "failed_count": 0,
-            "skipped_count": 0
+            "skipped_count": 0,
         }
         invalid_suite_response = await client.post("/api/v1/suites", json=invalid_suite_data)
         assert invalid_suite_response.status_code == 422  # Validation error
@@ -387,7 +413,7 @@ class TestCompleteWorkflows:
         invalid_result_data = {
             "suite_id": str(uuid4()),  # Non-existent suite ID
             "name": "invalid-test",
-            "status": "passed"
+            "status": "passed",
         }
         invalid_result_response = await client.post("/api/v1/results", json=invalid_result_data)
         assert invalid_result_response.status_code == 422  # Validation error
@@ -399,7 +425,7 @@ class TestCompleteWorkflows:
             "status": "passed",
             "duration_ms": 125,
             "tags": ["unit", "fast"],
-            "metadata": {"test_file": "user.test.js"}
+            "metadata": {"test_file": "user.test.js"},
         }
         result_response = await client.post("/api/v1/results", json=result_data)
         assert result_response.status_code == 201
@@ -447,7 +473,7 @@ class TestCompleteWorkflows:
         framework_data = {
             "name": "mocha",
             "version": f"10.2.{uuid4().hex[:8]}",
-            "metadata": {"reporter": "spec"}
+            "metadata": {"reporter": "spec"},
         }
         framework_response = await client.post("/api/v1/frameworks", json=framework_data)
         assert framework_response.status_code == 201
@@ -459,7 +485,7 @@ class TestCompleteWorkflows:
                 "name": f"concurrent-env-{index}",
                 "browser": browser,
                 "os": "windows",
-                "metadata": {"concurrent_test": True, "index": index}
+                "metadata": {"concurrent_test": True, "index": index},
             }
             env_response = await client.post("/api/v1/environments", json=env_data)
             assert env_response.status_code == 201
@@ -474,7 +500,7 @@ class TestCompleteWorkflows:
                 "failed_count": 1,
                 "skipped_count": 1,
                 "duration_ms": 5000 + (index * 1000),
-                "metadata": {"concurrent": True, "index": index}
+                "metadata": {"concurrent": True, "index": index},
             }
             suite_response = await client.post("/api/v1/suites", json=suite_data)
             assert suite_response.status_code == 201
@@ -494,7 +520,9 @@ class TestCompleteWorkflows:
         assert suites_response.status_code == 200
         all_suites = suites_response.json()
         created_suite_ids = {suite["id"] for suite in concurrent_suites}
-        fetched_suite_ids = {suite["id"] for suite in all_suites if "Concurrent Suite" in suite["name"]}
+        fetched_suite_ids = {
+            suite["id"] for suite in all_suites if "Concurrent Suite" in suite["name"]
+        }
         assert created_suite_ids == fetched_suite_ids
 
         print("✅ All integration tests with real PostgreSQL passed!")

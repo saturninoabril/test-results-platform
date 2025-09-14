@@ -4,24 +4,24 @@ Tests storage client initialization, configuration, and utility functions.
 """
 
 import hashlib
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
 from io import BytesIO
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from botocore.exceptions import ClientError
 
 from src.lib.storage import (
     StorageClient,
     StorageLifecycleManager,
-    init_storage,
-    close_storage,
-    get_storage_client,
-    get_storage,
-    generate_storage_key,
-    parse_storage_key,
     _storage_client,
+    close_storage,
+    generate_storage_key,
+    get_storage,
+    get_storage_client,
+    init_storage,
+    parse_storage_key,
 )
-from src.lib.config import get_settings
 
 
 class TestStorageClient:
@@ -78,7 +78,7 @@ class TestStorageClient:
         assert session2 is session1
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_get_s3_client_minio(self, mock_session_class):
         """Test S3 client creation for MinIO."""
         # Mock session and client
@@ -102,7 +102,7 @@ class TestStorageClient:
         assert "endpoint_url" in call_args[1]  # Should have endpoint_url for MinIO
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_get_s3_client_s3(self, mock_session_class):
         """Test S3 client creation for AWS S3."""
         # Mock session and client
@@ -116,7 +116,7 @@ class TestStorageClient:
         client._session = mock_session
 
         # Override storage type to S3
-        with patch.object(client.settings.storage, 'type', 's3'):
+        with patch.object(client.settings.storage, "type", "s3"):
             async with client._get_s3_client() as s3_client:
                 assert s3_client is mock_client
 
@@ -194,12 +194,13 @@ class TestStorageLifecycle:
         """Test storage initialization when already initialized."""
         # Mock existing client
         import src.lib.storage as storage_module
+
         original_client = storage_module._storage_client
         mock_client = MagicMock()
         storage_module._storage_client = mock_client
 
         try:
-            with patch('src.lib.storage.logger') as mock_logger:
+            with patch("src.lib.storage.logger") as mock_logger:
                 await init_storage()
                 mock_logger.warning.assert_called_once_with("Storage client already initialized")
 
@@ -212,6 +213,7 @@ class TestStorageLifecycle:
     async def test_close_storage(self):
         """Test storage client closing."""
         import src.lib.storage as storage_module
+
         original_client = storage_module._storage_client
         storage_module._storage_client = MagicMock()
 
@@ -224,6 +226,7 @@ class TestStorageLifecycle:
     def test_get_storage_client_not_initialized(self):
         """Test getting storage client when not initialized."""
         import src.lib.storage as storage_module
+
         original_client = storage_module._storage_client
         storage_module._storage_client = None
 
@@ -252,7 +255,7 @@ class TestHealthCheck:
     """Test storage health check."""
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_health_check_success(self, mock_session_class):
         """Test successful health check."""
         # Mock session and client
@@ -271,7 +274,7 @@ class TestHealthCheck:
         mock_client.list_buckets.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_health_check_failure(self, mock_session_class):
         """Test failed health check."""
         # Mock session and client with failure
@@ -293,7 +296,7 @@ class TestFileUploadOperations:
     """Test file upload operations."""
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_upload_file_success(self, mock_session_class):
         """Test successful file upload."""
         # Mock session and client
@@ -332,16 +335,14 @@ class TestFileUploadOperations:
         assert "Metadata" in call_kwargs
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_upload_file_bucket_creation(self, mock_session_class):
         """Test file upload with bucket creation."""
         # Mock session and client
         mock_session = MagicMock()
         mock_client = AsyncMock()
         # First call: bucket doesn't exist (404), second call: create bucket succeeds
-        mock_client.head_bucket.side_effect = ClientError(
-            {"Error": {"Code": "404"}}, "HeadBucket"
-        )
+        mock_client.head_bucket.side_effect = ClientError({"Error": {"Code": "404"}}, "HeadBucket")
         mock_client.create_bucket.return_value = None
         mock_client.put_object.return_value = None
         mock_session.client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -355,9 +356,7 @@ class TestFileUploadOperations:
         test_data = b"Test content"
         file_obj = BytesIO(test_data)
 
-        result = await client.upload_file(
-            file_obj, "videos/suite456/test.mp4", "video/mp4"
-        )
+        result = await client.upload_file(file_obj, "videos/suite456/test.mp4", "video/mp4")
 
         # Verify bucket creation was attempted
         mock_client.head_bucket.assert_called_once()
@@ -369,7 +368,7 @@ class TestFileUploadOperations:
         assert result["content_type"] == "video/mp4"
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_upload_file_invalid_storage_key(self, mock_session_class):
         """Test file upload with invalid storage key."""
         client = StorageClient()
@@ -381,7 +380,7 @@ class TestFileUploadOperations:
             await client.upload_file(file_obj, "invalid_key", "text/plain")
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_upload_file_client_error(self, mock_session_class):
         """Test file upload with client error."""
         # Mock session and client
@@ -429,7 +428,7 @@ class TestFileUploadOperations:
         assert bucket_name.endswith("-screenshots")
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_upload_multipart_large_file(self, mock_session_class):
         """Test multipart upload for large files."""
         # Mock session and client
@@ -452,9 +451,7 @@ class TestFileUploadOperations:
         test_data = b"x" * large_file_size
         file_obj = BytesIO(test_data)
 
-        result = await client.upload_file(
-            file_obj, "videos/suite789/large.mp4", "video/mp4"
-        )
+        result = await client.upload_file(file_obj, "videos/suite789/large.mp4", "video/mp4")
 
         # Verify multipart upload was used
         assert result["upload_method"] == "multipart"
@@ -468,7 +465,7 @@ class TestFileUploadOperations:
         mock_client.complete_multipart_upload.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_upload_single_part_small_file(self, mock_session_class):
         """Test single-part upload for small files."""
         # Mock session and client
@@ -489,9 +486,7 @@ class TestFileUploadOperations:
         test_data = b"y" * small_file_size
         file_obj = BytesIO(test_data)
 
-        result = await client.upload_file(
-            file_obj, "screenshots/suite456/small.png", "image/png"
-        )
+        result = await client.upload_file(file_obj, "screenshots/suite456/small.png", "image/png")
 
         # Verify single-part upload was used
         assert result["upload_method"] == "single-part"
@@ -505,7 +500,7 @@ class TestFileUploadOperations:
         mock_client.complete_multipart_upload.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_upload_multipart_failure_and_abort(self, mock_session_class):
         """Test multipart upload failure and abort."""
         # Mock session and client
@@ -516,7 +511,7 @@ class TestFileUploadOperations:
         # First part succeeds, second part fails
         mock_client.upload_part.side_effect = [
             {"ETag": "test-etag"},
-            ClientError({"Error": {"Code": "InternalError"}}, "UploadPart")
+            ClientError({"Error": {"Code": "InternalError"}}, "UploadPart"),
         ]
         mock_client.abort_multipart_upload.return_value = None
         mock_session.client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -533,9 +528,7 @@ class TestFileUploadOperations:
         file_obj = BytesIO(test_data)
 
         with pytest.raises(ClientError):
-            await client.upload_file(
-                file_obj, "videos/suite999/failed.mp4", "video/mp4"
-            )
+            await client.upload_file(file_obj, "videos/suite999/failed.mp4", "video/mp4")
 
         # Verify multipart upload was attempted and aborted
         mock_client.create_multipart_upload.assert_called_once()
@@ -551,7 +544,7 @@ class TestFileDownloadOperations:
     """Test file download operations."""
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_download_file_success(self, mock_session_class):
         """Test successful file download."""
         # Mock session and client
@@ -580,12 +573,11 @@ class TestFileDownloadOperations:
 
         # Verify S3 call
         mock_client.get_object.assert_called_once_with(
-            Bucket="dev-screenshots",
-            Key="test123/file.png"
+            Bucket="dev-screenshots", Key="test123/file.png"
         )
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_download_file_not_found(self, mock_session_class):
         """Test file download when file doesn't exist."""
         # Mock session and client
@@ -605,7 +597,7 @@ class TestFileDownloadOperations:
             await client.download_file("videos/missing.mp4")
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_download_file_checksum_mismatch(self, mock_session_class):
         """Test file download with checksum verification failure."""
         # Mock session and client
@@ -632,7 +624,7 @@ class TestFileDownloadOperations:
             await client.download_file("reports/corrupted.html")
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_download_file_stream_success(self, mock_session_class):
         """Test successful file streaming download."""
         # Mock session and client
@@ -640,10 +632,10 @@ class TestFileDownloadOperations:
         mock_client = AsyncMock()
         test_content = b"This is a large file content for streaming test"
         chunk_size = 8192
-        chunks = [test_content[i:i+chunk_size] for i in range(0, len(test_content), chunk_size)]
+        chunks = [test_content[i : i + chunk_size] for i in range(0, len(test_content), chunk_size)]
 
         mock_body = AsyncMock()
-        mock_body.read = AsyncMock(side_effect=chunks + [b''])  # End with empty bytes
+        mock_body.read = AsyncMock(side_effect=chunks + [b""])  # End with empty bytes
 
         mock_client.get_object.return_value = {
             "Body": mock_body,
@@ -665,13 +657,10 @@ class TestFileDownloadOperations:
         assert streamed_content == test_content
 
         # Verify S3 call
-        mock_client.get_object.assert_called_once_with(
-            Bucket="dev-videos",
-            Key="large.mp4"
-        )
+        mock_client.get_object.assert_called_once_with(Bucket="dev-videos", Key="large.mp4")
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_download_file_stream_with_range(self, mock_session_class):
         """Test file streaming download with range request."""
         # Mock session and client
@@ -680,10 +669,10 @@ class TestFileDownloadOperations:
         full_content = b"0123456789" * 100  # 1000 bytes
         range_start = 100
         range_end = 199
-        range_content = full_content[range_start:range_end+1]
+        range_content = full_content[range_start : range_end + 1]
 
         mock_body = AsyncMock()
-        mock_body.read = AsyncMock(side_effect=[range_content, b''])
+        mock_body.read = AsyncMock(side_effect=[range_content, b""])
 
         mock_client.get_object.return_value = {
             "Body": mock_body,
@@ -708,13 +697,11 @@ class TestFileDownloadOperations:
 
         # Verify S3 call with range
         mock_client.get_object.assert_called_once_with(
-            Bucket="dev-videos",
-            Key="large.mp4",
-            Range="bytes=100-199"
+            Bucket="dev-videos", Key="large.mp4", Range="bytes=100-199"
         )
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_download_file_stream_invalid_range(self, mock_session_class):
         """Test file streaming with invalid range request."""
         # Test the range validation that happens before S3 call
@@ -727,7 +714,7 @@ class TestFileDownloadOperations:
                 pass
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_download_file_stream_s3_invalid_range(self, mock_session_class):
         """Test file streaming with S3 invalid range response."""
         # Mock session and client
@@ -771,7 +758,7 @@ class TestFileDownloadOperations:
             client._build_range_header(None, None)
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_generate_signed_url_success(self, mock_session_class):
         """Test successful signed URL generation."""
         # Mock session and client
@@ -799,7 +786,7 @@ class TestFileDownloadOperations:
         )
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_generate_signed_url_different_methods(self, mock_session_class):
         """Test signed URL generation for different HTTP methods."""
         # Mock session and client
@@ -817,7 +804,7 @@ class TestFileDownloadOperations:
         methods = ["GET", "PUT", "DELETE", "HEAD"]
         operations = ["get_object", "put_object", "delete_object", "head_object"]
 
-        for method, expected_op in zip(methods, operations):
+        for method, expected_op in zip(methods, operations, strict=False):
             mock_client.reset_mock()
             await client.generate_signed_url("files/test.txt", method=method)
 
@@ -826,7 +813,7 @@ class TestFileDownloadOperations:
             assert call_args[0][0] == expected_op
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_generate_signed_url_unsupported_method(self, mock_session_class):
         """Test signed URL generation with unsupported HTTP method."""
         client = StorageClient()
@@ -835,7 +822,7 @@ class TestFileDownloadOperations:
             await client.generate_signed_url("files/test.txt", method="PATCH")
 
     @pytest.mark.asyncio
-    @patch('src.lib.storage.aioboto3.Session')
+    @patch("src.lib.storage.aioboto3.Session")
     async def test_generate_upload_signed_url_success(self, mock_session_class):
         """Test successful upload signed URL generation."""
         # Mock session and client
@@ -848,7 +835,7 @@ class TestFileDownloadOperations:
                 "key": "test.png",
                 "Content-Type": "image/png",
                 "x-amz-meta-uploaded-at": "2025-09-14T12:00:00",
-            }
+            },
         }
         mock_client.generate_presigned_post.return_value = test_response
         mock_session.client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -859,9 +846,7 @@ class TestFileDownloadOperations:
         client._session = mock_session
         client._bucket_cache["dev-screenshots"] = True
 
-        result = await client.generate_upload_signed_url(
-            "screenshots/test.png", "image/png", 3600
-        )
+        result = await client.generate_upload_signed_url("screenshots/test.png", "image/png", 3600)
 
         # Verify result structure
         assert result["upload_url"] == test_response["url"]
@@ -908,7 +893,7 @@ class TestStorageLifecycleManager:
                 "size": 2048,
                 "last_modified": new_date,
                 "etag": "def456",
-            }
+            },
         ]
 
         mock_storage_client.list_files.return_value = mock_files
@@ -944,9 +929,7 @@ class TestStorageLifecycleManager:
         ]
 
         mock_storage_client.list_files.return_value = mock_files
-        mock_storage_client.delete_files.return_value = {
-            "videos/suite1/old.mp4": True
-        }
+        mock_storage_client.delete_files.return_value = {"videos/suite1/old.mp4": True}
 
         result = await lifecycle_manager.cleanup_expired_artifacts(
             max_age_days=5, artifact_types=["videos"], dry_run=False
@@ -964,7 +947,9 @@ class TestStorageLifecycleManager:
         mock_storage_client.delete_files.assert_called_once_with(["videos/suite1/old.mp4"])
 
     @pytest.mark.asyncio
-    async def test_cleanup_expired_artifacts_with_failures(self, lifecycle_manager, mock_storage_client):
+    async def test_cleanup_expired_artifacts_with_failures(
+        self, lifecycle_manager, mock_storage_client
+    ):
         """Test cleanup handling delete failures."""
         old_date = datetime.utcnow() - timedelta(days=10)
 
@@ -980,7 +965,7 @@ class TestStorageLifecycleManager:
                 "size": 3072,
                 "last_modified": old_date,
                 "etag": "report456",
-            }
+            },
         ]
 
         mock_storage_client.list_files.return_value = mock_files
@@ -1000,7 +985,9 @@ class TestStorageLifecycleManager:
         assert result["failed_files"] == ["reports/suite2/old.xml"]
 
     @pytest.mark.asyncio
-    async def test_cleanup_expired_artifacts_iso_string_dates(self, lifecycle_manager, mock_storage_client):
+    async def test_cleanup_expired_artifacts_iso_string_dates(
+        self, lifecycle_manager, mock_storage_client
+    ):
         """Test cleanup with ISO string dates."""
         old_date_str = (datetime.utcnow() - timedelta(days=10)).isoformat() + "Z"
 
@@ -1058,12 +1045,10 @@ class TestStorageLifecycleManager:
 
         retention_rules = {
             "screenshots": 7,  # 7 days
-            "videos": 30,      # 30 days
+            "videos": 30,  # 30 days
         }
 
-        result = await lifecycle_manager.enforce_retention_policy(
-            retention_rules, dry_run=False
-        )
+        result = await lifecycle_manager.enforce_retention_policy(retention_rules, dry_run=False)
 
         # Verify results
         assert result["total_scanned"] == 2
@@ -1084,14 +1069,12 @@ class TestStorageLifecycleManager:
     async def test_enforce_retention_policy_invalid_rules(self, lifecycle_manager):
         """Test retention policy with invalid rules."""
         retention_rules = {
-            "screenshots": 0,   # Invalid
-            "videos": -5,       # Invalid
-            "reports": 30,      # Valid
+            "screenshots": 0,  # Invalid
+            "videos": -5,  # Invalid
+            "reports": 30,  # Valid
         }
 
-        result = await lifecycle_manager.enforce_retention_policy(
-            retention_rules, dry_run=True
-        )
+        result = await lifecycle_manager.enforce_retention_policy(retention_rules, dry_run=True)
 
         # Should only process valid rule
         assert "reports" in result["results_by_type"]
@@ -1144,7 +1127,9 @@ class TestStorageLifecycleManager:
         assert "screenshots/suite456/test1.png" not in result["deleted_files"]
 
     @pytest.mark.asyncio
-    async def test_cleanup_suite_artifacts_with_age_filter(self, lifecycle_manager, mock_storage_client):
+    async def test_cleanup_suite_artifacts_with_age_filter(
+        self, lifecycle_manager, mock_storage_client
+    ):
         """Test suite cleanup with age filtering."""
         old_date = datetime.utcnow() - timedelta(days=10)
         new_date = datetime.utcnow() - timedelta(days=1)
@@ -1197,7 +1182,7 @@ class TestStorageLifecycleManager:
                 "size": 2048,
                 "last_modified": datetime.utcnow() - timedelta(days=2),
                 "etag": "def",
-            }
+            },
         ]
 
         video_files = [
@@ -1242,6 +1227,7 @@ class TestStorageLifecycleManager:
     @pytest.mark.asyncio
     async def test_get_storage_usage_stats_with_error(self, lifecycle_manager, mock_storage_client):
         """Test storage usage statistics with listing error."""
+
         def mock_list_files(artifact_type):
             if artifact_type == "screenshots":
                 raise Exception("Access denied")

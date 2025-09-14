@@ -3,19 +3,19 @@ Unit tests for GitHub OAuth integration.
 Tests OAuth flow, user profile extraction, role mapping, and permission system.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-import httpx
 
+import pytest
+
+from src.lib.auth import UserRole
 from src.lib.github_oauth import (
     GitHubOAuthClient,
-    GitHubUserProfile,
-    GitHubOrganization,
     GitHubOAuthResult,
+    GitHubOrganization,
+    GitHubUserProfile,
     RoleMapper,
     get_github_oauth_client,
 )
-from src.lib.auth import UserRole
 
 
 class TestGitHubUserProfile:
@@ -221,7 +221,7 @@ class TestGitHubOAuthClient:
         assert "user:email" in oauth_client.scopes
         assert "read:org" in oauth_client.scopes
 
-    @patch('src.lib.github_oauth.get_settings')
+    @patch("src.lib.github_oauth.get_settings")
     def test_get_authorization_url(self, mock_get_settings, oauth_client):
         """Test authorization URL generation."""
         # Mock settings
@@ -239,7 +239,7 @@ class TestGitHubOAuthClient:
         assert "test_client_id" in result["authorization_url"]
         assert len(result["state"]) > 20  # Should be a secure random string
 
-    @patch('src.lib.github_oauth.get_settings')
+    @patch("src.lib.github_oauth.get_settings")
     def test_get_authorization_url_custom_state(self, mock_get_settings, oauth_client):
         """Test authorization URL with custom state."""
         mock_settings = MagicMock()
@@ -253,7 +253,7 @@ class TestGitHubOAuthClient:
 
         assert result["state"] == custom_state
 
-    @patch('src.lib.github_oauth.get_settings')
+    @patch("src.lib.github_oauth.get_settings")
     def test_get_authorization_url_no_client_id(self, mock_get_settings, oauth_client):
         """Test authorization URL generation without client ID."""
         mock_settings = MagicMock()
@@ -265,9 +265,11 @@ class TestGitHubOAuthClient:
             oauth_client.get_authorization_url()
 
     @pytest.mark.asyncio
-    @patch('src.lib.github_oauth.get_settings')
-    @patch('httpx.AsyncClient')
-    async def test_exchange_code_for_token_success(self, mock_httpx_client, mock_get_settings, oauth_client):
+    @patch("src.lib.github_oauth.get_settings")
+    @patch("httpx.AsyncClient")
+    async def test_exchange_code_for_token_success(
+        self, mock_httpx_client, mock_get_settings, oauth_client
+    ):
         """Test successful code to token exchange."""
         # Mock settings
         mock_settings = MagicMock()
@@ -292,9 +294,11 @@ class TestGitHubOAuthClient:
         mock_client.post.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('src.lib.github_oauth.get_settings')
-    @patch('httpx.AsyncClient')
-    async def test_exchange_code_for_token_error(self, mock_httpx_client, mock_get_settings, oauth_client):
+    @patch("src.lib.github_oauth.get_settings")
+    @patch("httpx.AsyncClient")
+    async def test_exchange_code_for_token_error(
+        self, mock_httpx_client, mock_get_settings, oauth_client
+    ):
         """Test code to token exchange with error response."""
         mock_settings = MagicMock()
         mock_settings.auth.github_client_id = "test_client_id"
@@ -317,7 +321,7 @@ class TestGitHubOAuthClient:
         assert token is None
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_get_user_profile_success(self, mock_httpx_client, oauth_client):
         """Test successful user profile retrieval."""
         # Mock user profile response
@@ -349,7 +353,7 @@ class TestGitHubOAuthClient:
         assert profile.email == "test@example.com"
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_get_user_profile_fetch_email(self, mock_httpx_client, oauth_client):
         """Test user profile retrieval with separate email fetch."""
         # Mock user profile response without email
@@ -386,7 +390,7 @@ class TestGitHubOAuthClient:
         assert mock_client.get.call_count == 2  # User profile + emails
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_get_user_organizations(self, mock_httpx_client, oauth_client):
         """Test user organizations retrieval."""
         # Mock organizations response
@@ -412,7 +416,7 @@ class TestGitHubOAuthClient:
         assert orgs[0].id == 67890
 
     @pytest.mark.asyncio
-    @patch('src.lib.github_oauth.get_settings')
+    @patch("src.lib.github_oauth.get_settings")
     async def test_authenticate_user_success(self, mock_get_settings, oauth_client):
         """Test complete authentication flow success."""
         # Mock settings
@@ -425,24 +429,28 @@ class TestGitHubOAuthClient:
 
         # Mock all the methods
         oauth_client.exchange_code_for_token = AsyncMock(return_value="github_token")
-        oauth_client.get_user_profile = AsyncMock(return_value=GitHubUserProfile(
-            id=12345,
-            login="testuser",
-            email="test@example.com",
-            avatar_url="https://avatars.githubusercontent.com/u/12345",
-            public_repos=10,
-            followers=5,
-            following=15,
-            created_at="2020-01-01T00:00:00Z",
-            updated_at="2025-01-01T00:00:00Z",
-        ))
+        oauth_client.get_user_profile = AsyncMock(
+            return_value=GitHubUserProfile(
+                id=12345,
+                login="testuser",
+                email="test@example.com",
+                avatar_url="https://avatars.githubusercontent.com/u/12345",
+                public_repos=10,
+                followers=5,
+                following=15,
+                created_at="2020-01-01T00:00:00Z",
+                updated_at="2025-01-01T00:00:00Z",
+            )
+        )
         oauth_client.get_user_organizations = AsyncMock(return_value=[])
 
         # Mock token manager
-        oauth_client.token_manager.create_user_tokens = AsyncMock(return_value={
-            "access_token": "app_access_token",
-            "refresh_token": "app_refresh_token",
-        })
+        oauth_client.token_manager.create_user_tokens = AsyncMock(
+            return_value={
+                "access_token": "app_access_token",
+                "refresh_token": "app_refresh_token",
+            }
+        )
 
         result = await oauth_client.authenticate_user("auth_code", "state_value")
 

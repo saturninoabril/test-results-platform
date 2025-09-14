@@ -4,19 +4,17 @@ Tests complete file upload/download workflows, multipart uploads, and cleanup op
 """
 
 import asyncio
-import sys
-import os
 import io
+import os
+import sys
 import time
 from pathlib import Path
-from typing import List
 
 # Add the project root to the path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.lib.storage import get_storage_client, init_storage, StorageClient
-from src.lib.config import get_settings
+from src.lib.storage import StorageClient, get_storage_client, init_storage
 
 
 class FileGenerator:
@@ -25,7 +23,7 @@ class FileGenerator:
     @staticmethod
     def generate_small_file(content: str = "Hello, MinIO!") -> io.BytesIO:
         """Generate a small text file for basic testing."""
-        return io.BytesIO(content.encode('utf-8'))
+        return io.BytesIO(content.encode("utf-8"))
 
     @staticmethod
     def generate_medium_file(size_kb: int = 100) -> io.BytesIO:
@@ -41,7 +39,7 @@ class FileGenerator:
 
         for i in range(size_mb):
             chunk = f"Chunk {i:04d} - " + "X" * (chunk_size - 20)
-            content.write(chunk.encode('utf-8')[:chunk_size])
+            content.write(chunk.encode("utf-8")[:chunk_size])
 
         content.seek(0)
         return content
@@ -50,10 +48,12 @@ class FileGenerator:
     def generate_image_file() -> io.BytesIO:
         """Generate a fake PNG image file for testing."""
         # PNG signature + minimal PNG structure
-        png_header = b'\x89PNG\r\n\x1a\n'
-        ihdr_chunk = b'\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde'
-        idat_chunk = b'\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x00\x01\x00\x18\xdd\x8d\xb4'
-        iend_chunk = b'\x00\x00\x00\x00IEND\xaeB`\x82'
+        png_header = b"\x89PNG\r\n\x1a\n"
+        ihdr_chunk = (
+            b"\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
+        )
+        idat_chunk = b"\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x00\x01\x00\x18\xdd\x8d\xb4"
+        iend_chunk = b"\x00\x00\x00\x00IEND\xaeB`\x82"
 
         fake_png = png_header + ihdr_chunk + idat_chunk + iend_chunk
         return io.BytesIO(fake_png)
@@ -92,7 +92,7 @@ async def test_basic_file_operations():
         file_obj=file_obj,
         storage_key=storage_key,
         content_type="text/plain",
-        metadata={"test": "basic_upload", "size": "small"}
+        metadata={"test": "basic_upload", "size": "small"},
     )
 
     assert "storage_key" in upload_result
@@ -103,7 +103,7 @@ async def test_basic_file_operations():
 
     # Download and verify content
     downloaded_content = await client.download_file(storage_key)
-    assert downloaded_content.decode('utf-8') == test_content
+    assert downloaded_content.decode("utf-8") == test_content
     print("✅ File download and content verification successful")
 
     # Test file existence
@@ -139,13 +139,15 @@ async def test_multipart_upload():
         file_obj=large_file,
         storage_key=storage_key,
         content_type="application/octet-stream",
-        metadata={"test": "multipart_upload", "original_size": str(original_size)}
+        metadata={"test": "multipart_upload", "original_size": str(original_size)},
     )
 
     upload_time = time.time() - start_time
 
     assert upload_result["size"] == original_size
-    print(f"✅ Large file uploaded: {upload_result['storage_key']} (size: {upload_result['size']} bytes, time: {upload_time:.2f}s)")
+    print(
+        f"✅ Large file uploaded: {upload_result['storage_key']} (size: {upload_result['size']} bytes, time: {upload_time:.2f}s)"
+    )
 
     # Verify download
     start_time = time.time()
@@ -153,7 +155,9 @@ async def test_multipart_upload():
     download_time = time.time() - start_time
 
     assert len(downloaded_content) == original_size
-    print(f"✅ Large file download successful (size: {len(downloaded_content)} bytes, time: {download_time:.2f}s)")
+    print(
+        f"✅ Large file download successful (size: {len(downloaded_content)} bytes, time: {download_time:.2f}s)"
+    )
 
     return storage_key
 
@@ -171,9 +175,7 @@ async def test_streaming_download():
 
     # Upload file first
     await client.upload_file(
-        file_obj=large_file,
-        storage_key=storage_key,
-        content_type="application/octet-stream"
+        file_obj=large_file, storage_key=storage_key, content_type="application/octet-stream"
     )
 
     # Test streaming download
@@ -185,10 +187,12 @@ async def test_streaming_download():
         total_size += len(chunk)
 
     # Verify streaming result
-    streamed_content = b''.join(chunks)
+    streamed_content = b"".join(chunks)
     assert len(streamed_content) == original_size
     assert total_size == len(streamed_content)
-    print(f"✅ Streaming download successful (chunks: {len(chunks)}, total size: {total_size} bytes)")
+    print(
+        f"✅ Streaming download successful (chunks: {len(chunks)}, total size: {total_size} bytes)"
+    )
 
     return storage_key
 
@@ -207,19 +211,19 @@ async def test_signed_urls():
         file_obj=test_file,
         storage_key=storage_key,
         content_type="image/png",
-        metadata={"test": "signed_url", "type": "image"}
+        metadata={"test": "signed_url", "type": "image"},
     )
 
     # Generate signed URL
     signed_url = await client.generate_signed_url(
         storage_key=storage_key,
-        expiration=3600  # 1 hour
+        expiration=3600,  # 1 hour
     )
 
     assert signed_url is not None
     assert "http" in signed_url.lower()
     assert storage_key.replace("/", "%2F") in signed_url or storage_key in signed_url
-    print(f"✅ Signed URL generated successfully")
+    print("✅ Signed URL generated successfully")
 
     return storage_key, signed_url
 
@@ -241,9 +245,7 @@ async def test_file_listing():
     for storage_key, content in test_files:
         file_obj = FileGenerator.generate_small_file(content)
         await client.upload_file(
-            file_obj=file_obj,
-            storage_key=storage_key,
-            content_type="text/plain"
+            file_obj=file_obj, storage_key=storage_key, content_type="text/plain"
         )
 
     # Test listing all files with prefix
@@ -282,7 +284,7 @@ async def test_bulk_operations():
             file_obj=file_obj,
             storage_key=storage_key,
             content_type="text/plain",
-            metadata={"batch": "bulk_test", "index": storage_key.split('-')[-1].split('.')[0]}
+            metadata={"batch": "bulk_test", "index": storage_key.split("-")[-1].split(".")[0]},
         )
         uploaded_files.append(result["storage_key"])
 
@@ -320,7 +322,7 @@ async def test_cleanup_operations():
             file_obj=file_obj,
             storage_key=storage_key,
             content_type="text/plain",
-            metadata={"temp": "true", "test": "cleanup"}
+            metadata={"temp": "true", "test": "cleanup"},
         )
         cleanup_files.append(storage_key)
 
@@ -386,9 +388,7 @@ async def test_error_handling():
         invalid_key = ""  # Empty key
         test_file = FileGenerator.generate_small_file("test")
         await client.upload_file(
-            file_obj=test_file,
-            storage_key=invalid_key,
-            content_type="text/plain"
+            file_obj=test_file, storage_key=invalid_key, content_type="text/plain"
         )
         assert False, "Should have raised an exception for invalid storage key"
     except Exception as e:
@@ -422,7 +422,7 @@ async def test_file_types_and_content_types():
             file_obj=file_obj,
             storage_key=storage_key,
             content_type=content_type,
-            metadata={"file_type": content_type.split('/')[0]}
+            metadata={"file_type": content_type.split("/")[0]},
         )
 
         uploaded_files.append((storage_key, content_type, content))
@@ -438,7 +438,7 @@ async def test_file_types_and_content_types():
         # Verify content for text files
         if original_content is not None:
             downloaded_content = await client.download_file(storage_key)
-            assert downloaded_content.decode('utf-8') == original_content
+            assert downloaded_content.decode("utf-8") == original_content
             print(f"✅ Content verified for {storage_key}")
 
     return uploaded_files
@@ -495,30 +495,31 @@ async def run_all_tests():
 
         # Summary
         total_files_created = (
-            1 +  # basic file
-            1 +  # large file
-            1 +  # stream file
-            1 +  # signed file
-            len(list_files) +  # list files
-            len(bulk_files) +  # bulk files
-            len(type_files)    # type files
+            1  # basic file
+            + 1  # large file
+            + 1  # stream file
+            + 1  # signed file
+            + len(list_files)  # list files
+            + len(bulk_files)  # bulk files
+            + len(type_files)  # type files
             # cleanup files are deleted
         )
 
-        print(f"📊 Test Summary:")
+        print("📊 Test Summary:")
         print(f"   • Total test files processed: ~{total_files_created}")
-        print(f"   • Multipart upload tested: ✅")
-        print(f"   • Streaming download tested: ✅")
-        print(f"   • Signed URLs tested: ✅")
-        print(f"   • Bulk operations tested: ✅")
-        print(f"   • Cleanup operations tested: ✅")
-        print(f"   • Error handling tested: ✅")
+        print("   • Multipart upload tested: ✅")
+        print("   • Streaming download tested: ✅")
+        print("   • Signed URLs tested: ✅")
+        print("   • Bulk operations tested: ✅")
+        print("   • Cleanup operations tested: ✅")
+        print("   • Error handling tested: ✅")
 
         return True
 
     except Exception as e:
         print(f"❌ Integration test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

@@ -3,11 +3,18 @@ TestSuite model for grouping test results from a single execution run.
 Represents a collection of tests executed together with summary statistics.
 """
 
-from datetime import datetime
-from typing import Dict, Any, Optional
-import uuid
+from __future__ import annotations
 
-from sqlalchemy import String, Integer, DateTime, ForeignKey, Index, CheckConstraint
+import uuid
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .test_framework import TestFramework
+    from .test_environment import TestEnvironment
+    from .test_result import TestResult
+
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
@@ -86,28 +93,19 @@ class TestSuite(BaseModel):
         comment="Suite execution completion time",
     )
 
-    config_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    config_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Suite-specific metadata and configuration",
     )
 
     # Relationships
-    framework: Mapped["TestFramework"] = relationship(
-        "TestFramework",
-        lazy="select"
-    )
+    framework: Mapped["TestFramework"] = relationship("TestFramework", lazy="select")
 
-    environment: Mapped["TestEnvironment"] = relationship(
-        "TestEnvironment",
-        lazy="select"
-    )
+    environment: Mapped["TestEnvironment"] = relationship("TestEnvironment", lazy="select")
 
     test_results: Mapped[list["TestResult"]] = relationship(
-        "TestResult",
-        back_populates="suite",
-        cascade="all, delete-orphan",
-        lazy="select"
+        "TestResult", back_populates="suite", cascade="all, delete-orphan", lazy="select"
     )
 
     # Constraints and indexes
@@ -120,7 +118,7 @@ class TestSuite(BaseModel):
         CheckConstraint("completed_at >= started_at", name="ck_completion_after_start"),
         CheckConstraint(
             "total_tests = passed_tests + failed_tests + skipped_tests",
-            name="ck_test_counts_consistent"
+            name="ck_test_counts_consistent",
         ),
         Index("ix_test_suites_framework_id", "framework_id"),
         Index("ix_test_suites_environment_id", "environment_id"),
@@ -164,7 +162,9 @@ class TestSuite(BaseModel):
         return timestamp
 
     @validates("config_metadata")
-    def validate_config_metadata(self, key: str, config_metadata: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def validate_config_metadata(
+        self, key: str, config_metadata: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
         """Validate config_metadata is a proper dictionary."""
         if config_metadata is None:
             return None
@@ -198,4 +198,6 @@ class TestSuite(BaseModel):
 
     def __str__(self) -> str:
         """String representation."""
-        return f"TestSuite(name='{self.name}', tests={self.total_tests}, passed={self.passed_tests})"
+        return (
+            f"TestSuite(name='{self.name}', tests={self.total_tests}, passed={self.passed_tests})"
+        )

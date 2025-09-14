@@ -3,9 +3,9 @@ TestFramework model for managing testing framework metadata.
 Represents testing tools like Playwright, Cypress with versions and configuration.
 """
 
-from typing import Dict, Any, Optional
+from typing import Any
 
-from sqlalchemy import String, Text, UniqueConstraint, Index
+from sqlalchemy import Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
@@ -29,7 +29,7 @@ class TestFramework(BaseModel):
         comment="Framework version (e.g., '1.55.0', '7.2.0')",
     )
 
-    config_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    config_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Framework-specific configuration and metadata",
@@ -74,7 +74,9 @@ class TestFramework(BaseModel):
         return version.strip()
 
     @validates("config_metadata")
-    def validate_config_metadata(self, key: str, config_metadata: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def validate_config_metadata(
+        self, key: str, config_metadata: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
         """Validate config_metadata is a proper dictionary."""
         if config_metadata is None:
             return None

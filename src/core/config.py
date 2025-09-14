@@ -2,12 +2,14 @@
 Production-ready configuration management with environment-specific settings.
 """
 
+import logging
 import os
 import secrets
-from typing import Any, Dict, List, Optional, Union, Literal
-from pydantic import BaseSettings, validator, Field, AnyHttpUrl, PostgresDsn
 from functools import lru_cache
-import logging
+from typing import Any, Literal
+
+from pydantic import Field, PostgresDsn, field_validator, ValidationInfo
+from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
 
@@ -15,206 +17,216 @@ logger = logging.getLogger(__name__)
 class DatabaseSettings(BaseSettings):
     """Database configuration settings."""
 
-    url: PostgresDsn = Field(..., env="DATABASE_URL")
-    pool_size: int = Field(50, env="DATABASE_POOL_SIZE")
-    max_overflow: int = Field(100, env="DATABASE_MAX_OVERFLOW")
-    pool_timeout: int = Field(30, env="DATABASE_POOL_TIMEOUT")
-    pool_recycle: int = Field(3600, env="DATABASE_POOL_RECYCLE")
-    query_timeout: int = Field(30, env="DATABASE_QUERY_TIMEOUT")
-    echo: bool = Field(False, env="DATABASE_ECHO")
+    url: PostgresDsn = Field(description="Database URL")
+    pool_size: int = Field(default=50, description="Database connection pool size")
+    max_overflow: int = Field(default=100, description="Maximum pool overflow")
+    pool_timeout: int = Field(default=30, description="Pool timeout in seconds")
+    pool_recycle: int = Field(default=3600, description="Pool recycle time")
+    query_timeout: int = Field(default=30, description="Query timeout in seconds")
+    echo: bool = Field(default=False, description="Enable SQL query logging")
 
-    class Config:
-        env_prefix = "DATABASE_"
+    model_config = {"env_prefix": "DATABASE_"}
 
 
 class StorageSettings(BaseSettings):
     """Storage configuration settings."""
 
-    type: Literal["s3", "minio"] = Field("s3", env="STORAGE_TYPE")
-    endpoint: Optional[str] = Field(None, env="STORAGE_ENDPOINT")
-    access_key: str = Field(..., env="STORAGE_ACCESS_KEY")
-    secret_key: str = Field(..., env="STORAGE_SECRET_KEY")
-    bucket: str = Field(..., env="STORAGE_BUCKET")
-    region: str = Field("us-east-1", env="STORAGE_REGION")
-    secure: bool = Field(True, env="STORAGE_SECURE")
+    type: Literal["s3", "minio"] = Field(default="s3", description="Storage type")
+    endpoint: str | None = Field(default=None, description="Storage endpoint URL")
+    access_key: str = Field(description="Storage access key")
+    secret_key: str = Field(description="Storage secret key")
+    bucket: str = Field(description="Storage bucket name")
+    region: str = Field(default="us-east-1", description="Storage region")
+    secure: bool = Field(default=True, description="Use secure connection")
 
-    class Config:
-        env_prefix = "STORAGE_"
+    model_config = {"env_prefix": "STORAGE_"}
 
 
 class AuthSettings(BaseSettings):
     """Authentication configuration settings."""
 
-    jwt_secret_key: str = Field(..., env="JWT_SECRET_KEY")
-    jwt_algorithm: str = Field("HS256", env="JWT_ALGORITHM")
-    jwt_expiration_hours: int = Field(24, env="JWT_EXPIRATION_HOURS")
-    automation_token_max_age_days: int = Field(365, env="AUTOMATION_TOKEN_MAX_AGE_DAYS")
+    jwt_secret_key: str = Field(description="JWT secret key")
+    jwt_algorithm: str = Field(default="HS256", description="JWT algorithm")
+    jwt_expiration_hours: int = Field(default=24, description="JWT expiration in hours")
+    automation_token_max_age_days: int = Field(default=365, description="Automation token max age in days")
 
     # GitHub OAuth
-    github_client_id: Optional[str] = Field(None, env="GITHUB_CLIENT_ID")
-    github_client_secret: Optional[str] = Field(None, env="GITHUB_CLIENT_SECRET")
-    github_redirect_uri: Optional[str] = Field(None, env="GITHUB_REDIRECT_URI")
+    github_client_id: str | None = Field(default=None, description="GitHub OAuth client ID")
+    github_client_secret: str | None = Field(default=None, description="GitHub OAuth client secret")
+    github_redirect_uri: str | None = Field(default=None, description="GitHub OAuth redirect URI")
 
-    @validator("jwt_secret_key")
+    @field_validator("jwt_secret_key")
+    @classmethod
     def validate_jwt_secret_key(cls, v: str) -> str:
         if len(v) < 32:
             raise ValueError("JWT secret key must be at least 32 characters long")
         return v
 
-    class Config:
-        env_prefix = "AUTH_"
+    model_config = {"env_prefix": "AUTH_"}
 
 
 class LoggingSettings(BaseSettings):
     """Logging configuration settings."""
 
-    level: str = Field("INFO", env="LOG_LEVEL")
-    format: Literal["json", "standard"] = Field("json", env="LOG_FORMAT")
-    file: Optional[str] = Field(None, env="LOG_FILE")
-    max_file_size_mb: int = Field(100, env="LOG_MAX_FILE_SIZE_MB")
-    backup_count: int = Field(5, env="LOG_BACKUP_COUNT")
-    structured_logging: bool = Field(True, env="STRUCTURED_LOGGING")
+    level: str = Field(default="INFO", description="Log level")
+    format: Literal["json", "standard"] = Field(default="json", description="Log format")
+    file: str | None = Field(default=None, description="Log file path")
+    max_file_size_mb: int = Field(default=100, description="Max log file size in MB")
+    backup_count: int = Field(default=5, description="Log backup count")
+    structured_logging: bool = Field(default=True, description="Enable structured logging")
 
-    class Config:
-        env_prefix = "LOG_"
+    model_config = {"env_prefix": "LOG_"}
 
 
 class MetricsSettings(BaseSettings):
     """Metrics and monitoring configuration."""
 
-    enabled: bool = Field(True, env="METRICS_ENABLED")
-    endpoint: str = Field("/metrics", env="METRICS_ENDPOINT")
-    include_request_id: bool = Field(True, env="METRICS_INCLUDE_REQUEST_ID")
-    slow_query_threshold_ms: float = Field(1000.0, env="METRICS_SLOW_QUERY_THRESHOLD_MS")
+    enabled: bool = Field(default=True, description="Enable metrics collection")
+    endpoint: str = Field(default="/metrics", description="Metrics endpoint path")
+    include_request_id: bool = Field(default=True, description="Include request ID in metrics")
+    slow_query_threshold_ms: float = Field(default=1000.0, description="Slow query threshold in ms")
 
-    class Config:
-        env_prefix = "METRICS_"
+    model_config = {"env_prefix": "METRICS_"}
 
 
 class SecuritySettings(BaseSettings):
     """Security configuration settings."""
 
     # CORS
-    cors_origins: List[str] = Field(["*"], env="CORS_ORIGINS")
-    cors_allow_credentials: bool = Field(True, env="CORS_ALLOW_CREDENTIALS")
-    cors_allow_methods: List[str] = Field(["*"], env="CORS_ALLOW_METHODS")
-    cors_allow_headers: List[str] = Field(["*"], env="CORS_ALLOW_HEADERS")
+    cors_origins: list[str] = Field(default=["*"])
+    cors_allow_credentials: bool = Field(default=True)
+    cors_allow_methods: list[str] = Field(default=["*"])
+    cors_allow_headers: list[str] = Field(default=["*"])
 
     # Security headers
-    enable_security_headers: bool = Field(True, env="ENABLE_SECURITY_HEADERS")
-    hsts_max_age: int = Field(31536000, env="HSTS_MAX_AGE")  # 1 year
-    content_security_policy: Optional[str] = Field(None, env="CONTENT_SECURITY_POLICY")
+    enable_security_headers: bool = Field(default=True)
+    hsts_max_age: int = Field(default=31536000)  # 1 year
+    content_security_policy: str | None = Field(default=None)
 
     # Rate limiting
-    rate_limit_enabled: bool = Field(True, env="RATE_LIMIT_ENABLED")
-    rate_limit_requests_per_minute: int = Field(60, env="RATE_LIMIT_REQUESTS_PER_MINUTE")
-    rate_limit_burst: int = Field(20, env="RATE_LIMIT_BURST")
+    rate_limit_enabled: bool = Field(default=True)
+    rate_limit_requests_per_minute: int = Field(default=60)
+    rate_limit_burst: int = Field(default=20)
 
     # File upload limits
-    max_upload_size_mb: int = Field(100, env="MAX_UPLOAD_SIZE_MB")
-    allowed_file_types: List[str] = Field([
-        "image/png", "image/jpeg", "image/gif", "image/webp",
-        "video/mp4", "video/webm", "video/avi",
-        "application/pdf", "text/html", "text/plain",
-        "application/zip", "application/x-tar", "application/gzip"
-    ], env="ALLOWED_FILE_TYPES")
+    max_upload_size_mb: int = Field(default=100)
+    allowed_file_types: list[str] = Field(
+        default=[
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/webp",
+            "video/mp4",
+            "video/webm",
+            "video/avi",
+            "application/pdf",
+            "text/html",
+            "text/plain",
+            "application/zip",
+            "application/x-tar",
+            "application/gzip",
+        ]
+    )
 
-    @validator("cors_origins", pre=True)
-    def parse_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",")]
         return v
 
-    @validator("cors_allow_methods", pre=True)
-    def parse_cors_methods(cls, v: Union[str, List[str]]) -> List[str]:
+    @field_validator("cors_allow_methods", mode="before")
+    @classmethod
+    def parse_cors_methods(cls, v: str | list[str]) -> list[str]:
         if isinstance(v, str):
             return [method.strip() for method in v.split(",")]
         return v
 
-    @validator("cors_allow_headers", pre=True)
-    def parse_cors_headers(cls, v: Union[str, List[str]]) -> List[str]:
+    @field_validator("cors_allow_headers", mode="before")
+    @classmethod
+    def parse_cors_headers(cls, v: str | list[str]) -> list[str]:
         if isinstance(v, str):
             return [header.strip() for header in v.split(",")]
         return v
 
-    @validator("allowed_file_types", pre=True)
-    def parse_allowed_file_types(cls, v: Union[str, List[str]]) -> List[str]:
+    @field_validator("allowed_file_types", mode="before")
+    @classmethod
+    def parse_allowed_file_types(cls, v: str | list[str]) -> list[str]:
         if isinstance(v, str):
             return [file_type.strip() for file_type in v.split(",")]
         return v
 
-    class Config:
-        env_prefix = "SECURITY_"
+    model_config = {"env_prefix": "SECURITY_"}
 
 
 class PerformanceSettings(BaseSettings):
     """Performance optimization settings."""
 
     # Worker configuration
-    workers: int = Field(4, env="WORKERS")
-    max_requests: int = Field(1000, env="MAX_REQUESTS")
-    max_requests_jitter: int = Field(50, env="MAX_REQUESTS_JITTER")
-    timeout_keep_alive: int = Field(5, env="TIMEOUT_KEEP_ALIVE")
+    workers: int = Field(default=4)
+    max_requests: int = Field(default=1000)
+    max_requests_jitter: int = Field(default=50)
+    timeout_keep_alive: int = Field(default=5)
 
     # Caching
-    cache_enabled: bool = Field(True, env="CACHE_ENABLED")
-    cache_redis_url: Optional[str] = Field(None, env="CACHE_REDIS_URL")
-    cache_ttl_seconds: int = Field(300, env="CACHE_TTL_SECONDS")
+    cache_enabled: bool = Field(default=True)
+    cache_redis_url: str | None = Field(default=None)
+    cache_ttl_seconds: int = Field(default=300)
 
     # Response limits
-    max_response_size_mb: int = Field(50, env="MAX_RESPONSE_SIZE_MB")
-    api_timeout_seconds: int = Field(30, env="API_TIMEOUT_SECONDS")
+    max_response_size_mb: int = Field(default=50)
+    api_timeout_seconds: int = Field(default=30)
 
-    class Config:
-        env_prefix = "PERFORMANCE_"
+    model_config = {"env_prefix": "PERFORMANCE_"}
 
 
 class Settings(BaseSettings):
     """Main application settings."""
 
     # Application metadata
-    app_name: str = Field("Test Results Management API", env="APP_NAME")
-    app_version: str = Field("0.4.0", env="APP_VERSION")
+    app_name: str = Field(default="Test Results Management API")
+    app_version: str = Field(default="0.4.0")
     app_description: str = Field(
-        "REST API for managing test execution results from end-to-end testing frameworks",
-        env="APP_DESCRIPTION"
+        default="REST API for managing test execution results from end-to-end testing frameworks"
     )
 
     # Environment
     environment: Literal["development", "staging", "production"] = Field(
-        "development", env="APP_ENVIRONMENT"
+        default="development"
     )
-    debug: bool = Field(False, env="DEBUG")
+    debug: bool = Field(default=False)
 
     # API configuration
-    api_v1_prefix: str = Field("/v1", env="API_V1_PREFIX")
-    docs_url: Optional[str] = Field("/docs", env="DOCS_URL")
-    redoc_url: Optional[str] = Field("/redoc", env="REDOC_URL")
-    openapi_url: Optional[str] = Field("/openapi.json", env="OPENAPI_URL")
+    api_v1_prefix: str = Field(default="/v1")
+    docs_url: str | None = Field(default="/docs")
+    redoc_url: str | None = Field(default="/redoc")
+    openapi_url: str | None = Field(default="/openapi.json")
 
     # Server configuration
-    host: str = Field("0.0.0.0", env="HOST")
-    port: int = Field(8000, env="PORT")
-    reload: bool = Field(False, env="RELOAD")
+    host: str = Field(default="0.0.0.0")
+    port: int = Field(default=8000)
+    reload: bool = Field(default=False)
 
     # Sub-configurations
-    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
-    storage: StorageSettings = Field(default_factory=StorageSettings)
-    auth: AuthSettings = Field(default_factory=AuthSettings)
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)  # type: ignore[arg-type]
+    storage: StorageSettings = Field(default_factory=StorageSettings)  # type: ignore[arg-type]
+    auth: AuthSettings = Field(default_factory=AuthSettings)  # type: ignore[arg-type]
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     metrics: MetricsSettings = Field(default_factory=MetricsSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
     performance: PerformanceSettings = Field(default_factory=PerformanceSettings)
 
-    @validator("environment")
+    @field_validator("environment")
+    @classmethod
     def validate_environment(cls, v: str) -> str:
         if v not in ["development", "staging", "production"]:
             raise ValueError("Environment must be development, staging, or production")
         return v
 
-    @validator("docs_url", "redoc_url", "openapi_url", pre=True)
-    def disable_docs_in_production(cls, v: Optional[str], values: Dict[str, Any]) -> Optional[str]:
-        if values.get("environment") == "production":
+    @field_validator("docs_url", "redoc_url", "openapi_url", mode="before")
+    @classmethod
+    def disable_docs_in_production(cls, v: str | None, info: ValidationInfo) -> str | None:
+        if info.data.get("environment") == "production":
             return None
         return v
 
@@ -230,17 +242,18 @@ class Settings(BaseSettings):
         """Get database URL string."""
         return str(self.database.url)
 
-    def get_cors_origins(self) -> List[str]:
+    def get_cors_origins(self) -> list[str]:
         """Get CORS origins list."""
         if self.is_development():
             return ["*"]
         return self.security.cors_origins
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        validate_assignment = True
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "case_sensitive": False,
+        "validate_assignment": True,
+    }
 
 
 class DevelopmentSettings(Settings):
@@ -251,22 +264,21 @@ class DevelopmentSettings(Settings):
     reload: bool = True
 
     # Override sub-settings for development
-    logging: LoggingSettings = Field(default_factory=lambda: LoggingSettings(
-        level="DEBUG",
-        format="standard",
-        structured_logging=False
-    ))
+    logging: LoggingSettings = Field(
+        default_factory=lambda: LoggingSettings(
+            level="DEBUG", format="standard", structured_logging=False
+        )
+    )
 
-    security: SecuritySettings = Field(default_factory=lambda: SecuritySettings(
-        cors_origins=["*"],
-        rate_limit_enabled=False,
-        enable_security_headers=False
-    ))
+    security: SecuritySettings = Field(
+        default_factory=lambda: SecuritySettings(
+            cors_origins=["*"], rate_limit_enabled=False, enable_security_headers=False
+        )
+    )
 
-    performance: PerformanceSettings = Field(default_factory=lambda: PerformanceSettings(
-        workers=1,
-        cache_enabled=False
-    ))
+    performance: PerformanceSettings = Field(
+        default_factory=lambda: PerformanceSettings(workers=1, cache_enabled=False)
+    )
 
 
 class ProductionSettings(Settings):
@@ -275,20 +287,21 @@ class ProductionSettings(Settings):
     environment: Literal["production"] = "production"
     debug: bool = False
     reload: bool = False
-    docs_url: Optional[str] = None
-    redoc_url: Optional[str] = None
+    docs_url: str | None = None
+    redoc_url: str | None = None
 
     # Override sub-settings for production
-    logging: LoggingSettings = Field(default_factory=lambda: LoggingSettings(
-        level="INFO",
-        format="json",
-        structured_logging=True
-    ))
+    logging: LoggingSettings = Field(
+        default_factory=lambda: LoggingSettings(
+            level="INFO", format="json", structured_logging=True
+        )
+    )
 
-    security: SecuritySettings = Field(default_factory=lambda: SecuritySettings(
-        enable_security_headers=True,
-        rate_limit_enabled=True
-    ))
+    security: SecuritySettings = Field(
+        default_factory=lambda: SecuritySettings(
+            enable_security_headers=True, rate_limit_enabled=True
+        )
+    )
 
 
 class StagingSettings(Settings):
@@ -297,18 +310,18 @@ class StagingSettings(Settings):
     environment: Literal["staging"] = "staging"
     debug: bool = False
 
-    logging: LoggingSettings = Field(default_factory=lambda: LoggingSettings(
-        level="INFO",
-        format="json"
-    ))
+    logging: LoggingSettings = Field(
+        default_factory=lambda: LoggingSettings(level="INFO", format="json")
+    )
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     """Get application settings (cached)."""
 
     environment = os.getenv("APP_ENVIRONMENT", "development").lower()
 
+    settings_class: type[Settings]
     if environment == "production":
         settings_class = ProductionSettings
     elif environment == "staging":
@@ -331,7 +344,7 @@ def generate_secret_key() -> str:
     return secrets.token_urlsafe(32)
 
 
-def validate_configuration(settings: Settings) -> List[str]:
+def validate_configuration(settings: Settings) -> list[str]:
     """Validate configuration and return any warnings or errors."""
 
     warnings = []

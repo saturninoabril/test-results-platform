@@ -3,27 +3,28 @@ Unit tests for authentication middleware and dependencies.
 Tests bearer token validation, user context, and permission-based access control.
 """
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
-from fastapi import HTTPException, status
+
+import pytest
+from fastapi import status
 from fastapi.security import HTTPAuthorizationCredentials
 
+from src.lib.auth import TokenClaims, TokenScope, TokenType, TokenValidationResult, UserRole
 from src.lib.middleware import (
-    AuthenticatedUser,
     AuthenticatedAutomation,
+    AuthenticatedUser,
     AuthenticationError,
     PermissionError,
+    add_auth_context_to_request,
     get_bearer_token,
-    validate_token,
-    get_current_user,
     get_current_automation,
     get_current_context,
+    get_current_user,
     require_permissions,
     require_role,
-    add_auth_context_to_request,
+    validate_token,
 )
-from src.lib.auth import TokenClaims, TokenScope, TokenType, TokenValidationResult, UserRole
 
 
 class TestAuthenticationModels:
@@ -38,7 +39,7 @@ class TestAuthenticationModels:
             token_type=TokenType.ACCESS,
             username="testuser",
             email="test@example.com",
-            role=UserRole.USER
+            role=UserRole.USER,
         )
 
         user = AuthenticatedUser(
@@ -48,7 +49,7 @@ class TestAuthenticationModels:
             role=UserRole.USER,
             github_id=123,
             permissions=["results:read", "results:write"],
-            token_claims=claims
+            token_claims=claims,
         )
 
         assert user.user_id == "github:123"
@@ -67,14 +68,14 @@ class TestAuthenticationModels:
             scope=TokenScope.AUTOMATION,
             token_type=TokenType.AUTOMATION,
             automation_name="ci-system",
-            permissions=["results:write", "artifacts:write"]
+            permissions=["results:write", "artifacts:write"],
         )
 
         automation = AuthenticatedAutomation(
             automation_id="automation:ci:abcd1234",
             automation_name="ci-system",
             permissions=["results:write", "artifacts:write"],
-            token_claims=claims
+            token_claims=claims,
         )
 
         assert automation.automation_id == "automation:ci:abcd1234"
@@ -89,10 +90,7 @@ class TestBearerTokenExtraction:
     @pytest.mark.asyncio
     async def test_get_bearer_token_success(self):
         """Test successful bearer token extraction."""
-        credentials = HTTPAuthorizationCredentials(
-            scheme="Bearer",
-            credentials="test-token-123"
-        )
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="test-token-123")
 
         token = await get_bearer_token(credentials)
         assert token == "test-token-123"
@@ -109,10 +107,7 @@ class TestBearerTokenExtraction:
     @pytest.mark.asyncio
     async def test_get_bearer_token_invalid_scheme(self):
         """Test invalid authorization scheme."""
-        credentials = HTTPAuthorizationCredentials(
-            scheme="Basic",
-            credentials="test-token-123"
-        )
+        credentials = HTTPAuthorizationCredentials(scheme="Basic", credentials="test-token-123")
 
         with pytest.raises(AuthenticationError) as exc_info:
             await get_bearer_token(credentials)
@@ -123,10 +118,7 @@ class TestBearerTokenExtraction:
     @pytest.mark.asyncio
     async def test_get_bearer_token_empty_credentials(self):
         """Test empty token credentials."""
-        credentials = HTTPAuthorizationCredentials(
-            scheme="Bearer",
-            credentials=""
-        )
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="")
 
         with pytest.raises(AuthenticationError) as exc_info:
             await get_bearer_token(credentials)
@@ -139,7 +131,7 @@ class TestTokenValidation:
     """Test JWT token validation."""
 
     @pytest.mark.asyncio
-    @patch('src.lib.middleware.get_token_manager')
+    @patch("src.lib.middleware.get_token_manager")
     async def test_validate_token_success(self, mock_get_token_manager):
         """Test successful token validation."""
         # Mock token manager
@@ -156,19 +148,17 @@ class TestTokenValidation:
             token_type=TokenType.ACCESS,
             username="testuser",
             email="test@example.com",
-            role=UserRole.USER
+            role=UserRole.USER,
         )
         mock_jwt_auth.validate_token.return_value = TokenValidationResult(
-            valid=True,
-            claims=claims,
-            scope=TokenScope.USER
+            valid=True, claims=claims, scope=TokenScope.USER
         )
 
         result = await validate_token("valid-token")
         assert result == claims
 
     @pytest.mark.asyncio
-    @patch('src.lib.middleware.get_token_manager')
+    @patch("src.lib.middleware.get_token_manager")
     async def test_validate_token_expired(self, mock_get_token_manager):
         """Test expired token validation."""
         mock_token_manager = AsyncMock()
@@ -177,9 +167,7 @@ class TestTokenValidation:
         mock_get_token_manager.return_value = mock_token_manager
 
         mock_jwt_auth.validate_token.return_value = TokenValidationResult(
-            valid=False,
-            expired=True,
-            error="Token has expired"
+            valid=False, expired=True, error="Token has expired"
         )
 
         with pytest.raises(AuthenticationError) as exc_info:
@@ -188,7 +176,7 @@ class TestTokenValidation:
         assert "Token has expired" in str(exc_info.value.detail)
 
     @pytest.mark.asyncio
-    @patch('src.lib.middleware.get_token_manager')
+    @patch("src.lib.middleware.get_token_manager")
     async def test_validate_token_invalid(self, mock_get_token_manager):
         """Test invalid token validation."""
         mock_token_manager = AsyncMock()
@@ -197,8 +185,7 @@ class TestTokenValidation:
         mock_get_token_manager.return_value = mock_token_manager
 
         mock_jwt_auth.validate_token.return_value = TokenValidationResult(
-            valid=False,
-            error="Invalid signature"
+            valid=False, error="Invalid signature"
         )
 
         with pytest.raises(AuthenticationError) as exc_info:
@@ -211,13 +198,15 @@ class TestUserAuthentication:
     """Test user authentication from token claims."""
 
     @pytest.mark.asyncio
-    @patch('src.lib.middleware.get_github_oauth_client')
+    @patch("src.lib.middleware.get_github_oauth_client")
     async def test_get_current_user_success(self, mock_get_github_client):
         """Test successful user authentication."""
         # Mock GitHub OAuth client
         mock_github_client = MagicMock()
         mock_github_client.get_user_permissions.return_value = [
-            "results:read", "results:write", "suites:read"
+            "results:read",
+            "results:write",
+            "suites:read",
         ]
         mock_get_github_client.return_value = mock_github_client
 
@@ -229,7 +218,7 @@ class TestUserAuthentication:
             username="testuser",
             email="test@example.com",
             role=UserRole.USER,
-            github_id=123
+            github_id=123,
         )
 
         user = await get_current_user(claims)
@@ -251,7 +240,7 @@ class TestUserAuthentication:
             exp=datetime.utcnow() + timedelta(days=30),
             scope=TokenScope.AUTOMATION,
             token_type=TokenType.AUTOMATION,
-            automation_name="ci-system"
+            automation_name="ci-system",
         )
 
         with pytest.raises(AuthenticationError) as exc_info:
@@ -266,7 +255,7 @@ class TestUserAuthentication:
             sub="github:123",
             exp=datetime.utcnow() + timedelta(hours=1),
             scope=TokenScope.USER,
-            token_type=TokenType.ACCESS
+            token_type=TokenType.ACCESS,
             # Missing username, email, role
         )
 
@@ -288,7 +277,7 @@ class TestAutomationAuthentication:
             scope=TokenScope.AUTOMATION,
             token_type=TokenType.AUTOMATION,
             automation_name="ci-system",
-            permissions=["results:write", "artifacts:write"]
+            permissions=["results:write", "artifacts:write"],
         )
 
         automation = await get_current_automation(claims)
@@ -307,7 +296,7 @@ class TestAutomationAuthentication:
             exp=datetime.utcnow() + timedelta(hours=1),
             scope=TokenScope.USER,
             token_type=TokenType.ACCESS,
-            username="testuser"
+            username="testuser",
         )
 
         with pytest.raises(AuthenticationError) as exc_info:
@@ -322,7 +311,7 @@ class TestAutomationAuthentication:
             sub="automation:ci:abcd1234",
             exp=datetime.utcnow() + timedelta(days=30),
             scope=TokenScope.AUTOMATION,
-            token_type=TokenType.AUTOMATION
+            token_type=TokenType.AUTOMATION,
             # Missing automation_name
         )
 
@@ -336,7 +325,7 @@ class TestContextAuthentication:
     """Test generic context authentication."""
 
     @pytest.mark.asyncio
-    @patch('src.lib.middleware.get_github_oauth_client')
+    @patch("src.lib.middleware.get_github_oauth_client")
     async def test_get_current_context_user(self, mock_get_github_client):
         """Test context authentication for user tokens."""
         # Mock GitHub OAuth client
@@ -351,7 +340,7 @@ class TestContextAuthentication:
             token_type=TokenType.ACCESS,
             username="testuser",
             email="test@example.com",
-            role=UserRole.USER
+            role=UserRole.USER,
         )
 
         context = await get_current_context(claims)
@@ -367,7 +356,7 @@ class TestContextAuthentication:
             scope=TokenScope.AUTOMATION,
             token_type=TokenType.AUTOMATION,
             automation_name="ci-system",
-            permissions=["results:write"]
+            permissions=["results:write"],
         )
 
         context = await get_current_context(claims)
@@ -381,7 +370,7 @@ class TestContextAuthentication:
             sub="invalid:123",
             exp=datetime.utcnow() + timedelta(hours=1),
             scope=TokenScope.ADMIN,  # Invalid scope
-            token_type=TokenType.ACCESS
+            token_type=TokenType.ACCESS,
         )
 
         with pytest.raises(AuthenticationError) as exc_info:
@@ -400,7 +389,7 @@ class TestPermissionRequirements:
             sub="github:123",
             exp=datetime.utcnow() + timedelta(hours=1),
             scope=TokenScope.USER,
-            token_type=TokenType.ACCESS
+            token_type=TokenType.ACCESS,
         )
         context = AuthenticatedUser(
             user_id="github:123",
@@ -408,7 +397,7 @@ class TestPermissionRequirements:
             email="test@example.com",
             role=UserRole.USER,
             permissions=["results:read", "results:write", "suites:read"],
-            token_claims=claims
+            token_claims=claims,
         )
 
         # Test the dependency function directly
@@ -423,7 +412,7 @@ class TestPermissionRequirements:
             sub="github:123",
             exp=datetime.utcnow() + timedelta(hours=1),
             scope=TokenScope.USER,
-            token_type=TokenType.ACCESS
+            token_type=TokenType.ACCESS,
         )
         context = AuthenticatedUser(
             user_id="github:123",
@@ -431,7 +420,7 @@ class TestPermissionRequirements:
             email="test@example.com",
             role=UserRole.USER,
             permissions=["results:read"],
-            token_claims=claims
+            token_claims=claims,
         )
 
         dependency_func = require_permissions("results:read", "results:delete")
@@ -449,13 +438,13 @@ class TestPermissionRequirements:
             sub="automation:ci:abcd1234",
             exp=datetime.utcnow() + timedelta(days=30),
             scope=TokenScope.AUTOMATION,
-            token_type=TokenType.AUTOMATION
+            token_type=TokenType.AUTOMATION,
         )
         context = AuthenticatedAutomation(
             automation_id="automation:ci:abcd1234",
             automation_name="ci-system",
             permissions=["results:write", "artifacts:write"],
-            token_claims=claims
+            token_claims=claims,
         )
 
         dependency_func = require_permissions("results:write")
@@ -473,7 +462,7 @@ class TestRoleRequirements:
             sub="github:123",
             exp=datetime.utcnow() + timedelta(hours=1),
             scope=TokenScope.USER,
-            token_type=TokenType.ACCESS
+            token_type=TokenType.ACCESS,
         )
         user = AuthenticatedUser(
             user_id="github:123",
@@ -481,7 +470,7 @@ class TestRoleRequirements:
             email="test@example.com",
             role=UserRole.ADMIN,
             permissions=[],
-            token_claims=claims
+            token_claims=claims,
         )
 
         dependency_func = require_role(UserRole.ADMIN, UserRole.USER)
@@ -495,7 +484,7 @@ class TestRoleRequirements:
             sub="github:123",
             exp=datetime.utcnow() + timedelta(hours=1),
             scope=TokenScope.USER,
-            token_type=TokenType.ACCESS
+            token_type=TokenType.ACCESS,
         )
         user = AuthenticatedUser(
             user_id="github:123",
@@ -503,7 +492,7 @@ class TestRoleRequirements:
             email="test@example.com",
             role=UserRole.READONLY,
             permissions=[],
-            token_claims=claims
+            token_claims=claims,
         )
 
         dependency_func = require_role(UserRole.ADMIN)
@@ -519,10 +508,13 @@ class TestRequestMiddleware:
     """Test request middleware for authentication context."""
 
     @pytest.mark.asyncio
-    @patch('src.lib.middleware.get_token_manager')
-    @patch('src.lib.middleware.get_github_oauth_client')
-    async def test_add_auth_context_user_token(self, mock_get_github_client, mock_get_token_manager):
+    @patch("src.lib.middleware.get_token_manager")
+    @patch("src.lib.middleware.get_github_oauth_client")
+    async def test_add_auth_context_user_token(
+        self, mock_get_github_client, mock_get_token_manager
+    ):
         """Test adding user auth context to request."""
+
         # Create a real request state object
         class MockState:
             pass
@@ -552,23 +544,20 @@ class TestRequestMiddleware:
             username="testuser",
             email="test@example.com",
             role=UserRole.USER,
-            github_id=123
+            github_id=123,
         )
-        mock_jwt_auth.validate_token.return_value = TokenValidationResult(
-            valid=True,
-            claims=claims
-        )
+        mock_jwt_auth.validate_token.return_value = TokenValidationResult(valid=True, claims=claims)
 
         await add_auth_context_to_request(mock_request)
 
         # Verify user context was added
-        assert hasattr(mock_request.state, 'user')
+        assert hasattr(mock_request.state, "user")
         user = mock_request.state.user
         assert user.user_id == "github:123"
         assert user.username == "testuser"
 
     @pytest.mark.asyncio
-    @patch('src.lib.middleware.get_token_manager')
+    @patch("src.lib.middleware.get_token_manager")
     async def test_add_auth_context_automation_token(self, mock_get_token_manager):
         """Test adding automation auth context to request."""
         # Mock request
@@ -589,17 +578,14 @@ class TestRequestMiddleware:
             scope=TokenScope.AUTOMATION,
             token_type=TokenType.AUTOMATION,
             automation_name="ci-system",
-            permissions=["results:write"]
+            permissions=["results:write"],
         )
-        mock_jwt_auth.validate_token.return_value = TokenValidationResult(
-            valid=True,
-            claims=claims
-        )
+        mock_jwt_auth.validate_token.return_value = TokenValidationResult(valid=True, claims=claims)
 
         await add_auth_context_to_request(mock_request)
 
         # Verify automation context was added
-        assert hasattr(mock_request.state, 'automation')
+        assert hasattr(mock_request.state, "automation")
         automation = mock_request.state.automation
         assert automation.automation_id == "automation:ci:abcd1234"
         assert automation.automation_name == "ci-system"
@@ -607,6 +593,7 @@ class TestRequestMiddleware:
     @pytest.mark.asyncio
     async def test_add_auth_context_no_header(self):
         """Test middleware with no authorization header."""
+
         class MockState:
             pass
 
@@ -618,13 +605,14 @@ class TestRequestMiddleware:
         await add_auth_context_to_request(mock_request)
 
         # Should not add any auth context
-        assert not hasattr(mock_request.state, 'user')
-        assert not hasattr(mock_request.state, 'automation')
+        assert not hasattr(mock_request.state, "user")
+        assert not hasattr(mock_request.state, "automation")
 
     @pytest.mark.asyncio
-    @patch('src.lib.middleware.get_token_manager')
+    @patch("src.lib.middleware.get_token_manager")
     async def test_add_auth_context_invalid_token(self, mock_get_token_manager):
         """Test middleware with invalid token."""
+
         class MockState:
             pass
 
@@ -639,13 +627,12 @@ class TestRequestMiddleware:
         mock_get_token_manager.return_value = mock_token_manager
 
         mock_jwt_auth.validate_token.return_value = TokenValidationResult(
-            valid=False,
-            error="Invalid signature"
+            valid=False, error="Invalid signature"
         )
 
         # Should not raise exception
         await add_auth_context_to_request(mock_request)
 
         # Should not add any auth context
-        assert not hasattr(mock_request.state, 'user')
-        assert not hasattr(mock_request.state, 'automation')
+        assert not hasattr(mock_request.state, "user")
+        assert not hasattr(mock_request.state, "automation")

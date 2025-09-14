@@ -3,23 +3,21 @@ Unit tests for authentication library.
 Tests JWT token generation, validation, refresh mechanisms, and token scopes.
 """
 
-import pytest
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime, timedelta
+
 import jwt
+import pytest
 
 from src.lib.auth import (
     JWTAuthenticator,
-    TokenManager,
     TokenClaims,
+    TokenManager,
     TokenScope,
     TokenType,
     UserRole,
-    TokenValidationResult,
-    get_token_manager,
     generate_secure_secret_key,
+    get_token_manager,
 )
-from src.lib.config import get_settings
 
 
 class TestTokenClaims:
@@ -50,8 +48,8 @@ class TestTokenClaims:
     def test_token_claims_datetime_validation(self):
         """Test datetime field validation."""
         # Should handle timezone-aware datetime by converting to naive
-        from datetime import timezone
-        tz_aware_time = datetime.now(timezone.utc)
+
+        tz_aware_time = datetime.now(UTC)
 
         claims = TokenClaims(
             sub="user123",
@@ -208,7 +206,7 @@ class TestJWTAuthenticator:
         fake_token = jwt.encode(
             {"sub": "user123", "exp": datetime.utcnow() + timedelta(hours=1)},
             "wrong-secret",
-            algorithm="HS256"
+            algorithm="HS256",
         )
 
         result = authenticator.validate_token(fake_token)
@@ -442,6 +440,7 @@ class TestTokenManager:
 
         # Manually set expiration in the past by re-encoding
         import jwt
+
         payload = jwt.decode(expired_refresh, options={"verify_signature": False})
         payload["exp"] = (datetime.utcnow() - timedelta(hours=1)).timestamp()
         expired_refresh = jwt.encode(payload, token_manager.jwt_auth._secret_key, algorithm="HS256")

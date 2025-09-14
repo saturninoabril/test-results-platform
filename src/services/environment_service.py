@@ -3,28 +3,28 @@ Environment service for managing test environment CRUD operations.
 Provides business logic for environment management with proper error handling.
 """
 
-from typing import List, Optional
 from uuid import UUID
 
 import structlog
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
+from ..api.models import EnvironmentCreateRequest, EnvironmentResponse, EnvironmentUpdateRequest
 from ..lib.database import get_session
 from ..models.test_environment import TestEnvironment
-from ..api.models import EnvironmentCreateRequest, EnvironmentUpdateRequest, EnvironmentResponse
 
 logger = structlog.get_logger()
 
 
 class EnvironmentNotFoundError(Exception):
     """Environment not found error."""
+
     pass
 
 
 class EnvironmentAlreadyExistsError(Exception):
     """Environment already exists error."""
+
     pass
 
 
@@ -41,7 +41,7 @@ class EnvironmentService:
             os=environment.os,
             metadata=environment.config_metadata,
             created_at=environment.created_at,
-            updated_at=environment.updated_at
+            updated_at=environment.updated_at,
         )
 
     @staticmethod
@@ -53,7 +53,7 @@ class EnvironmentService:
                 select(TestEnvironment).where(
                     TestEnvironment.name == request.name,
                     TestEnvironment.browser == request.browser,
-                    TestEnvironment.os == request.os
+                    TestEnvironment.os == request.os,
                 )
             )
 
@@ -62,7 +62,7 @@ class EnvironmentService:
                     "Environment already exists",
                     name=request.name,
                     browser=request.browser,
-                    os=request.os
+                    os=request.os,
                 )
                 raise EnvironmentAlreadyExistsError(
                     f"Environment '{request.name}' with browser '{request.browser}' and OS '{request.os}' already exists"
@@ -73,7 +73,7 @@ class EnvironmentService:
                 name=request.name,
                 browser=request.browser,
                 os=request.os,
-                config_metadata=request.metadata
+                config_metadata=request.metadata,
             )
 
             session.add(environment)
@@ -87,7 +87,7 @@ class EnvironmentService:
                     environment_id=str(environment.id),
                     name=environment.name,
                     browser=environment.browser,
-                    os=environment.os
+                    os=environment.os,
                 )
 
                 return EnvironmentService._convert_to_response(environment)
@@ -100,7 +100,7 @@ class EnvironmentService:
                 )
 
     @staticmethod
-    async def get_environments() -> List[EnvironmentResponse]:
+    async def get_environments() -> list[EnvironmentResponse]:
         """Get all test environments."""
         async with get_session() as session:
             result = await session.execute(
@@ -109,7 +109,9 @@ class EnvironmentService:
             environments = result.scalars().all()
 
             logger.debug("Retrieved environments", count=len(environments))
-            return [EnvironmentService._convert_to_response(environment) for environment in environments]
+            return [
+                EnvironmentService._convert_to_response(environment) for environment in environments
+            ]
 
     @staticmethod
     async def get_environment(environment_id: UUID) -> EnvironmentResponse:
@@ -122,36 +124,36 @@ class EnvironmentService:
                 raise EnvironmentNotFoundError(f"Environment with ID '{environment_id}' not found")
 
             logger.debug(
-                "Retrieved environment",
-                environment_id=str(environment_id),
-                name=environment.name
+                "Retrieved environment", environment_id=str(environment_id), name=environment.name
             )
             return EnvironmentService._convert_to_response(environment)
 
     @staticmethod
     async def update_environment(
-        environment_id: UUID,
-        request: EnvironmentUpdateRequest
+        environment_id: UUID, request: EnvironmentUpdateRequest
     ) -> EnvironmentResponse:
         """Update a test environment."""
         async with get_session() as session:
             environment = await session.get(TestEnvironment, environment_id)
 
             if not environment:
-                logger.warning("Environment not found for update", environment_id=str(environment_id))
+                logger.warning(
+                    "Environment not found for update", environment_id=str(environment_id)
+                )
                 raise EnvironmentNotFoundError(f"Environment with ID '{environment_id}' not found")
 
             # Check if updating to a name/browser/os combination that already exists (but not this environment)
-            if (environment.name != request.name or
-                environment.browser != request.browser or
-                environment.os != request.os):
-
+            if (
+                environment.name != request.name
+                or environment.browser != request.browser
+                or environment.os != request.os
+            ):
                 existing = await session.scalar(
                     select(TestEnvironment).where(
                         TestEnvironment.name == request.name,
                         TestEnvironment.browser == request.browser,
                         TestEnvironment.os == request.os,
-                        TestEnvironment.id != environment_id
+                        TestEnvironment.id != environment_id,
                     )
                 )
 
@@ -161,7 +163,7 @@ class EnvironmentService:
                         environment_id=str(environment_id),
                         name=request.name,
                         browser=request.browser,
-                        os=request.os
+                        os=request.os,
                     )
                     raise EnvironmentAlreadyExistsError(
                         f"Environment '{request.name}' with browser '{request.browser}' and OS '{request.os}' already exists"
@@ -182,7 +184,7 @@ class EnvironmentService:
                     environment_id=str(environment.id),
                     name=environment.name,
                     browser=environment.browser,
-                    os=environment.os
+                    os=environment.os,
                 )
 
                 return EnvironmentService._convert_to_response(environment)
@@ -201,7 +203,9 @@ class EnvironmentService:
             environment = await session.get(TestEnvironment, environment_id)
 
             if not environment:
-                logger.warning("Environment not found for deletion", environment_id=str(environment_id))
+                logger.warning(
+                    "Environment not found for deletion", environment_id=str(environment_id)
+                )
                 raise EnvironmentNotFoundError(f"Environment with ID '{environment_id}' not found")
 
             await session.delete(environment)
@@ -212,15 +216,13 @@ class EnvironmentService:
                 environment_id=str(environment_id),
                 name=environment.name,
                 browser=environment.browser,
-                os=environment.os
+                os=environment.os,
             )
 
     @staticmethod
     async def get_environments_by_filter(
-        name: Optional[str] = None,
-        browser: Optional[str] = None,
-        os: Optional[str] = None
-    ) -> List[EnvironmentResponse]:
+        name: str | None = None, browser: str | None = None, os: str | None = None
+    ) -> list[EnvironmentResponse]:
         """Get environments with optional filters."""
         async with get_session() as session:
             query = select(TestEnvironment)
@@ -241,6 +243,8 @@ class EnvironmentService:
                 count=len(environments),
                 name=name,
                 browser=browser,
-                os=os
+                os=os,
             )
-            return [EnvironmentService._convert_to_response(environment) for environment in environments]
+            return [
+                EnvironmentService._convert_to_response(environment) for environment in environments
+            ]

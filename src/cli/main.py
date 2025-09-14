@@ -14,15 +14,16 @@ from rich.console import Console
 # Add the parent directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cli.auth import auth_cli
+# from cli.auth import auth_cli
 
 console = Console()
 
+
 @click.group()
 @click.version_option(version="0.4.0", prog_name="test-results-cli")
-@click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.pass_context
-def cli(ctx, verbose):
+def cli(ctx: click.Context, verbose: bool) -> None:
     """Test Results Management API CLI Tools.
 
     A comprehensive command-line interface for managing test results,
@@ -37,15 +38,15 @@ def cli(ctx, verbose):
     For detailed help on any command, use: test-results-cli <command> --help
     """
     ctx.ensure_object(dict)
-    ctx.obj['verbose'] = verbose
+    ctx.obj["verbose"] = verbose
 
 
 # Register subcommands
-cli.add_command(auth_cli, name='auth')
+# cli.add_command(auth_cli, name="auth")
 
 
 @cli.command()
-def version():
+def version() -> None:
     """Show version information."""
     rprint("🧪 [bold]Test Results Management API CLI[/bold]")
     rprint("   Version: 0.4.0")
@@ -54,7 +55,7 @@ def version():
 
 
 @cli.command()
-def quickstart():
+def quickstart() -> None:
     """Show quickstart guide for CLI usage."""
     rprint("""
 🚀 [bold blue]Test Results CLI Quickstart Guide[/bold blue]
@@ -82,7 +83,7 @@ def quickstart():
 """)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         cli()
     except KeyboardInterrupt:
@@ -90,6 +91,6 @@ if __name__ == '__main__':
         sys.exit(0)
     except Exception as e:
         rprint(f"\n❌ [bold red]Error:[/bold red] {e}")
-        if '--verbose' in sys.argv or '-v' in sys.argv:
+        if "--verbose" in sys.argv or "-v" in sys.argv:
             raise
         sys.exit(1)

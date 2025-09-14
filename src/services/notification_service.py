@@ -4,8 +4,7 @@ Integrates with Mattermost and other notification channels.
 """
 
 import logging
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..lib.config import get_settings
 from ..lib.mattermost import MattermostClient, get_mattermost_client
@@ -18,11 +17,11 @@ logger = logging.getLogger(__name__)
 class NotificationService:
     """Service for sending notifications about test results and system events."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = get_settings()
-        self._mattermost_client: Optional[MattermostClient] = None
+        self._mattermost_client: MattermostClient | None = None
 
-    async def _get_mattermost_client(self) -> Optional[MattermostClient]:
+    async def _get_mattermost_client(self) -> MattermostClient | None:
         """Get or create Mattermost client if enabled."""
         if not self.settings.mattermost.enabled:
             return None
@@ -38,7 +37,7 @@ class NotificationService:
         suite: TestSuite,
         framework_name: str,
         environment_name: str,
-        channel: Optional[str] = None
+        channel: str | None = None,
     ) -> bool:
         """
         Send notification when a test fails.
@@ -64,7 +63,7 @@ class NotificationService:
                     error_message=test_result.error_message,
                     retry_count=test_result.retry_count,
                     duration_ms=test_result.duration_ms,
-                    channel=channel
+                    channel=channel,
                 )
             return False
 
@@ -77,7 +76,7 @@ class NotificationService:
         suite: TestSuite,
         framework_name: str,
         environment_name: str,
-        channel: Optional[str] = None
+        channel: str | None = None,
     ) -> bool:
         """
         Send notification when a test suite completes.
@@ -104,7 +103,7 @@ class NotificationService:
                     skipped_tests=suite.skipped_tests,
                     duration_ms=suite.duration_ms,
                     started_at=suite.started_at,
-                    channel=channel
+                    channel=channel,
                 )
             return False
 
@@ -117,8 +116,8 @@ class NotificationService:
         suite: TestSuite,
         framework_name: str,
         environment_name: str,
-        failed_tests: List[TestResult],
-        channel: Optional[str] = None
+        failed_tests: list[TestResult],
+        channel: str | None = None,
     ) -> bool:
         """
         Send notification for high failure rate in a test suite.
@@ -138,7 +137,9 @@ class NotificationService:
                 return False
 
             failure_rate = suite.failed_tests / suite.total_tests
-            recent_failures = [test.test_name for test in failed_tests[:10]]  # Limit to 10 recent failures
+            recent_failures = [
+                test.test_name for test in failed_tests[:10]
+            ]  # Limit to 10 recent failures
 
             mattermost = await self._get_mattermost_client()
             if mattermost:
@@ -150,7 +151,7 @@ class NotificationService:
                     failed_tests=suite.failed_tests,
                     total_tests=suite.total_tests,
                     recent_failures=recent_failures,
-                    channel=channel
+                    channel=channel,
                 )
             return False
 
@@ -163,8 +164,8 @@ class NotificationService:
         title: str,
         message: str,
         severity: str = "warning",
-        details: Optional[Dict[str, Any]] = None,
-        channel: Optional[str] = None
+        details: dict[str, Any] | None = None,
+        channel: str | None = None,
     ) -> bool:
         """
         Send system alert notification.
@@ -187,7 +188,7 @@ class NotificationService:
                     message=message,
                     severity=severity,
                     details=details,
-                    channel=channel
+                    channel=channel,
                 )
             return False
 
@@ -201,8 +202,8 @@ class NotificationService:
         current_value: float,
         threshold_value: float,
         unit: str = "",
-        context: Optional[str] = None,
-        channel: Optional[str] = None
+        context: str | None = None,
+        channel: str | None = None,
     ) -> bool:
         """
         Send performance alert notification.
@@ -227,7 +228,7 @@ class NotificationService:
                     threshold_value=threshold_value,
                     unit=unit,
                     context=context,
-                    channel=channel
+                    channel=channel,
                 )
             return False
 
@@ -237,12 +238,12 @@ class NotificationService:
 
     async def notify_bulk_failure_analysis(
         self,
-        failed_results: List[TestResult],
+        failed_results: list[TestResult],
         suite_name: str,
         framework_name: str,
         environment_name: str,
-        analysis: Optional[Dict[str, Any]] = None,
-        channel: Optional[str] = None
+        analysis: dict[str, Any] | None = None,
+        channel: str | None = None,
     ) -> bool:
         """
         Send notification with analysis of multiple test failures.
@@ -263,12 +264,12 @@ class NotificationService:
                 return False
 
             # Group failures by error pattern
-            error_patterns = {}
+            error_patterns: dict[str, list[TestResult]] = {}
             for result in failed_results:
                 error_key = result.error_message[:100] if result.error_message else "Unknown error"
                 if error_key not in error_patterns:
                     error_patterns[error_key] = []
-                error_patterns[error_key].append(result.test_name)
+                error_patterns[error_key].append(result)
 
             # Create analysis summary
             analysis_details = {
@@ -295,14 +296,14 @@ class NotificationService:
                 message=message,
                 severity="error",
                 details=analysis_details,
-                channel=channel
+                channel=channel,
             )
 
         except Exception as e:
             logger.error(f"Error sending bulk failure analysis notification: {str(e)}")
             return False
 
-    async def close(self):
+    async def close(self) -> None:
         """Close notification service and clean up resources."""
         if self._mattermost_client:
             await self._mattermost_client.__aexit__(None, None, None)
@@ -310,7 +311,7 @@ class NotificationService:
 
 
 # Global notification service instance
-_notification_service: Optional[NotificationService] = None
+_notification_service: NotificationService | None = None
 
 
 def get_notification_service() -> NotificationService:
@@ -321,7 +322,7 @@ def get_notification_service() -> NotificationService:
     return _notification_service
 
 
-async def close_notification_service():
+async def close_notification_service() -> None:
     """Close the global notification service."""
     global _notification_service
     if _notification_service:

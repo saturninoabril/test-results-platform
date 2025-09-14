@@ -3,32 +3,32 @@ Suite service for managing test suite CRUD operations.
 Provides business logic for suite management with relationships and statistics.
 """
 
-from typing import List, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
-from datetime import datetime
 
 import structlog
-from sqlalchemy import select, and_, or_
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import IntegrityError, NoResultFound
+from sqlalchemy import and_, select
+from sqlalchemy.exc import IntegrityError
 
+from ..api.models import SuiteCreateRequest, SuiteResponse, SuiteUpdateRequest
 from ..lib.database import get_session
-from ..models.test_suite import TestSuite
-from ..models.test_framework import TestFramework
 from ..models.test_environment import TestEnvironment
-from ..api.models import SuiteCreateRequest, SuiteUpdateRequest, SuiteResponse
+from ..models.test_framework import TestFramework
+from ..models.test_suite import TestSuite
 
 logger = structlog.get_logger()
 
 
 class SuiteNotFoundError(Exception):
     """Suite not found error."""
+
     pass
 
 
 class SuiteValidationError(Exception):
     """Suite validation error."""
+
     pass
 
 
@@ -50,7 +50,7 @@ class SuiteService:
             duration_ms=suite.duration_ms,
             metadata=suite.config_metadata,
             created_at=suite.created_at,
-            updated_at=suite.updated_at
+            updated_at=suite.updated_at,
         )
 
     @staticmethod
@@ -64,11 +64,14 @@ class SuiteService:
 
             environment = await session.get(TestEnvironment, request.environment_id)
             if not environment:
-                raise SuiteValidationError(f"Environment with ID '{request.environment_id}' not found")
+                raise SuiteValidationError(
+                    f"Environment with ID '{request.environment_id}' not found"
+                )
 
             # Create new suite - map API fields to database fields
-            from datetime import datetime, timezone
-            now = datetime.now(timezone.utc)
+            from datetime import datetime
+
+            now = datetime.now(UTC)
 
             suite = TestSuite(
                 framework_id=request.framework_id,
@@ -81,7 +84,7 @@ class SuiteService:
                 duration_ms=request.duration_ms or 0,
                 started_at=now,
                 completed_at=now,
-                config_metadata=request.metadata
+                config_metadata=request.metadata,
             )
 
             session.add(suite)
@@ -96,7 +99,7 @@ class SuiteService:
                     name=suite.name,
                     framework_id=str(suite.framework_id),
                     environment_id=str(suite.environment_id),
-                    total_tests=suite.total_tests
+                    total_tests=suite.total_tests,
                 )
 
                 return SuiteService._convert_to_response(suite)
@@ -107,12 +110,10 @@ class SuiteService:
                 raise SuiteValidationError(f"Suite creation failed: {str(e)}")
 
     @staticmethod
-    async def get_suites() -> List[SuiteResponse]:
+    async def get_suites() -> list[SuiteResponse]:
         """Get all test suites."""
         async with get_session() as session:
-            result = await session.execute(
-                select(TestSuite).order_by(TestSuite.created_at.desc())
-            )
+            result = await session.execute(select(TestSuite).order_by(TestSuite.created_at.desc()))
             suites = result.scalars().all()
 
             logger.debug("Retrieved suites", count=len(suites))
@@ -145,12 +146,16 @@ class SuiteService:
             if suite.framework_id != request.framework_id:
                 framework = await session.get(TestFramework, request.framework_id)
                 if not framework:
-                    raise SuiteValidationError(f"Framework with ID '{request.framework_id}' not found")
+                    raise SuiteValidationError(
+                        f"Framework with ID '{request.framework_id}' not found"
+                    )
 
             if suite.environment_id != request.environment_id:
                 environment = await session.get(TestEnvironment, request.environment_id)
                 if not environment:
-                    raise SuiteValidationError(f"Environment with ID '{request.environment_id}' not found")
+                    raise SuiteValidationError(
+                        f"Environment with ID '{request.environment_id}' not found"
+                    )
 
             # Update suite fields - map API fields to database fields
             suite.framework_id = request.framework_id
@@ -160,7 +165,7 @@ class SuiteService:
             suite.passed_tests = request.passed_count
             suite.failed_tests = request.failed_count
             suite.skipped_tests = request.skipped_count
-            suite.duration_ms = request.duration_ms
+            suite.duration_ms = request.duration_ms or 0
             suite.config_metadata = request.metadata
 
             try:
@@ -171,7 +176,7 @@ class SuiteService:
                     "Suite updated",
                     suite_id=str(suite.id),
                     name=suite.name,
-                    total_count=suite.total_count
+                    total_count=suite.total_tests,
                 )
 
                 return SuiteService._convert_to_response(suite)
@@ -194,22 +199,18 @@ class SuiteService:
             await session.delete(suite)
             await session.commit()
 
-            logger.info(
-                "Suite deleted",
-                suite_id=str(suite_id),
-                name=suite.name
-            )
+            logger.info("Suite deleted", suite_id=str(suite_id), name=suite.name)
 
     @staticmethod
     async def get_suites_by_filter(
-        framework_id: Optional[UUID] = None,
-        environment_id: Optional[UUID] = None,
-        name: Optional[str] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        framework_id: UUID | None = None,
+        environment_id: UUID | None = None,
+        name: str | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
         limit: int = 100,
-        offset: int = 0
-    ) -> List[SuiteResponse]:
+        offset: int = 0,
+    ) -> list[SuiteResponse]:
         """Get suites with filtering and pagination."""
         async with get_session() as session:
             query = select(TestSuite)
@@ -242,17 +243,17 @@ class SuiteService:
                 count=len(suites),
                 framework_id=str(framework_id) if framework_id else None,
                 environment_id=str(environment_id) if environment_id else None,
-                name=name
+                name=name,
             )
             return [SuiteService._convert_to_response(suite) for suite in suites]
 
     @staticmethod
     async def get_suite_statistics(
-        framework_id: Optional[UUID] = None,
-        environment_id: Optional[UUID] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
-    ) -> dict:
+        framework_id: UUID | None = None,
+        environment_id: UUID | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> dict[str, Any]:
         """Get aggregated suite statistics."""
         async with get_session() as session:
             query = select(TestSuite)
@@ -292,7 +293,7 @@ class SuiteService:
                 "total_skipped": total_skipped,
                 "pass_rate_percent": round(pass_rate, 2),
                 "total_duration_ms": total_duration,
-                "avg_duration_ms": round(total_duration / total_suites) if total_suites > 0 else 0
+                "avg_duration_ms": round(total_duration / total_suites) if total_suites > 0 else 0,
             }
 
             logger.debug("Calculated suite statistics", **statistics)

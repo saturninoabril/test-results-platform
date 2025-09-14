@@ -2,22 +2,23 @@
 Security middleware and configuration for production deployment.
 """
 
-import time
+import hashlib
+import hmac
 import logging
-from typing import Dict, List, Optional, Callable
-from fastapi import FastAPI, Request, Response, HTTPException, status
+import time
+from collections.abc import Callable
+from typing import Any, Optional
+from urllib.parse import urlparse
+
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler  # type: ignore[import-not-found]
+from slowapi.errors import RateLimitExceeded  # type: ignore[import-not-found]
+from slowapi.middleware import SlowAPIMiddleware  # type: ignore[import-not-found]
+from slowapi.util import get_remote_address  # type: ignore[import-not-found]
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response as StarletteResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-import hashlib
-import hmac
-from urllib.parse import urlparse
 
 from .config import Settings
 
@@ -27,20 +28,19 @@ logger = logging.getLogger(__name__)
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Middleware to add security headers to all responses."""
 
-    def __init__(self, app, settings: Settings):
+    def __init__(self, app: Any, settings: Settings) -> None:
         super().__init__(app)
         self.settings = settings
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
         """Add security headers to response."""
 
-        response = await call_next(request)
+        response: Response = await call_next(request)
 
         if self.settings.security.enable_security_headers:
             # Strict Transport Security (HSTS)
             response.headers["Strict-Transport-Security"] = (
-                f"max-age={self.settings.security.hsts_max_age}; "
-                "includeSubDomains; preload"
+                f"max-age={self.settings.security.hsts_max_age}; includeSubDomains; preload"
             )
 
             # Content Security Policy
@@ -79,7 +79,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
 
             # Remove server information
-            response.headers.pop("Server", None)
+            if "Server" in response.headers:
+                del response.headers["Server"]
 
         return response
 
@@ -87,74 +88,71 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 class RequestSizeMiddleware(BaseHTTPMiddleware):
     """Middleware to limit request size."""
 
-    def __init__(self, app, max_size_mb: int = 100):
+    def __init__(self, app: Any, max_size_mb: int = 100) -> None:
         super().__init__(app)
         self.max_size_bytes = max_size_mb * 1024 * 1024
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
         """Check request size before processing."""
 
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > self.max_size_bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"Request size exceeds maximum allowed size of {self.max_size_bytes / 1024 / 1024}MB"
+                detail=f"Request size exceeds maximum allowed size of {self.max_size_bytes / 1024 / 1024}MB",
             )
 
-        return await call_next(request)
+        return await call_next(request)  # type: ignore[no-any-return]
 
 
 class IPWhitelistMiddleware(BaseHTTPMiddleware):
     """Middleware to whitelist IP addresses (optional)."""
 
-    def __init__(self, app, allowed_ips: List[str] = None):
+    def __init__(self, app: Any, allowed_ips: Optional[list[str]] = None) -> None:
         super().__init__(app)
         self.allowed_ips = allowed_ips or []
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
         """Check if IP is in whitelist."""
 
         if not self.allowed_ips:
-            return await call_next(request)
+            return await call_next(request)  # type: ignore[no-any-return]
 
         client_ip = get_remote_address(request)
         if client_ip not in self.allowed_ips:
             logger.warning(f"Blocked request from unauthorized IP: {client_ip}")
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied from this IP address"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied from this IP address"
             )
 
-        return await call_next(request)
+        return await call_next(request)  # type: ignore[no-any-return]
 
 
 class WebhookSignatureMiddleware(BaseHTTPMiddleware):
     """Middleware to validate webhook signatures."""
 
-    def __init__(self, app, webhook_secret: Optional[str] = None):
+    def __init__(self, app: Any, webhook_secret: str | None = None) -> None:
         super().__init__(app)
         self.webhook_secret = webhook_secret
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
         """Validate webhook signature for webhook endpoints."""
 
         # Only apply to webhook endpoints
         if not request.url.path.startswith("/webhooks/"):
-            return await call_next(request)
+            return await call_next(request)  # type: ignore[no-any-return]
 
         if not self.webhook_secret:
             logger.warning("Webhook endpoint accessed but no secret configured")
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Webhook authentication required"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Webhook authentication required"
             )
 
         # Get signature from headers
         signature = request.headers.get("X-Webhook-Signature")
         if not signature:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing webhook signature"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing webhook signature"
             )
 
         # Read request body for signature validation
@@ -162,29 +160,26 @@ class WebhookSignatureMiddleware(BaseHTTPMiddleware):
 
         # Validate signature
         expected_signature = hmac.new(
-            self.webhook_secret.encode('utf-8'),
-            body,
-            hashlib.sha256
+            self.webhook_secret.encode("utf-8"), body, hashlib.sha256
         ).hexdigest()
 
         if not hmac.compare_digest(signature, f"sha256={expected_signature}"):
             logger.warning("Invalid webhook signature received")
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid webhook signature"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature"
             )
 
-        return await call_next(request)
+        return await call_next(request)  # type: ignore[no-any-return]
 
 
 class RequestTimingMiddleware(BaseHTTPMiddleware):
     """Middleware to add request timing headers."""
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
         """Add timing information to response headers."""
 
         start_time = time.time()
-        response = await call_next(request)
+        response: Response = await call_next(request)
         process_time = time.time() - start_time
 
         response.headers["X-Process-Time"] = str(process_time)
@@ -202,7 +197,7 @@ def configure_cors(app: FastAPI, settings: Settings) -> None:
         allow_credentials=settings.security.cors_allow_credentials,
         allow_methods=settings.security.cors_allow_methods,
         allow_headers=settings.security.cors_allow_headers,
-        expose_headers=["X-Process-Time", "X-Request-ID"]
+        expose_headers=["X-Process-Time", "X-Request-ID"],
     )
 
     logger.info(f"CORS configured with origins: {origins}")
@@ -217,44 +212,40 @@ def configure_rate_limiting(app: FastAPI, settings: Settings) -> Limiter:
 
     limiter = Limiter(
         key_func=get_remote_address,
-        default_limits=[f"{settings.security.rate_limit_requests_per_minute}/minute"]
+        default_limits=[f"{settings.security.rate_limit_requests_per_minute}/minute"],
     )
 
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
 
-    logger.info(f"Rate limiting configured: {settings.security.rate_limit_requests_per_minute}/minute")
+    logger.info(
+        f"Rate limiting configured: {settings.security.rate_limit_requests_per_minute}/minute"
+    )
     return limiter
 
 
-def configure_trusted_hosts(app: FastAPI, allowed_hosts: List[str] = None) -> None:
+def configure_trusted_hosts(app: FastAPI, allowed_hosts: Optional[list[str]] = None) -> None:
     """Configure trusted host middleware."""
 
     if not allowed_hosts:
         return
 
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=allowed_hosts
-    )
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
     logger.info(f"Trusted hosts configured: {allowed_hosts}")
 
 
-def setup_security_middleware(app: FastAPI, settings: Settings) -> Dict[str, any]:
+def setup_security_middleware(app: FastAPI, settings: Settings) -> dict[str, Any]:
     """Set up all security middleware and return configuration."""
 
-    security_config = {}
+    security_config: dict[str, Any] = {}
 
     # Add compression middleware (early in stack)
     app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     # Add request size limiting
-    app.add_middleware(
-        RequestSizeMiddleware,
-        max_size_mb=settings.security.max_upload_size_mb
-    )
+    app.add_middleware(RequestSizeMiddleware, max_size_mb=settings.security.max_upload_size_mb)
 
     # Add security headers
     app.add_middleware(SecurityHeadersMiddleware, settings=settings)
@@ -285,13 +276,13 @@ def setup_security_middleware(app: FastAPI, settings: Settings) -> Dict[str, any
             security_config["trusted_hosts"] = trusted_hosts
 
     # Optional: IP whitelist (if configured)
-    allowed_ips = []  # Could be loaded from environment
+    allowed_ips: list[str] = []  # Could be loaded from environment
     if allowed_ips:
         app.add_middleware(IPWhitelistMiddleware, allowed_ips=allowed_ips)
         security_config["ip_whitelist"] = len(allowed_ips)
 
     # Optional: Webhook signature validation
-    webhook_secret = None  # Could be loaded from environment
+    webhook_secret = settings.security.webhook_secret if hasattr(settings.security, 'webhook_secret') else None
     if webhook_secret:
         app.add_middleware(WebhookSignatureMiddleware, webhook_secret=webhook_secret)
         security_config["webhook_auth"] = True
@@ -303,7 +294,7 @@ def setup_security_middleware(app: FastAPI, settings: Settings) -> Dict[str, any
 class FileTypeValidator:
     """Validate uploaded file types."""
 
-    def __init__(self, allowed_types: List[str]):
+    def __init__(self, allowed_types: list[str]):
         self.allowed_types = allowed_types
 
     def validate_content_type(self, content_type: str) -> bool:
@@ -315,45 +306,45 @@ class FileTypeValidator:
         if not filename:
             return False
 
-        extension = filename.lower().split('.')[-1]
+        extension = filename.lower().split(".")[-1]
 
         # Map extensions to content types
         extension_map = {
-            'png': 'image/png',
-            'jpg': 'image/jpeg',
-            'jpeg': 'image/jpeg',
-            'gif': 'image/gif',
-            'webp': 'image/webp',
-            'mp4': 'video/mp4',
-            'webm': 'video/webm',
-            'avi': 'video/avi',
-            'pdf': 'application/pdf',
-            'html': 'text/html',
-            'txt': 'text/plain',
-            'zip': 'application/zip',
-            'tar': 'application/x-tar',
-            'gz': 'application/gzip'
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "gif": "image/gif",
+            "webp": "image/webp",
+            "mp4": "video/mp4",
+            "webm": "video/webm",
+            "avi": "video/avi",
+            "pdf": "application/pdf",
+            "html": "text/html",
+            "txt": "text/plain",
+            "zip": "application/zip",
+            "tar": "application/x-tar",
+            "gz": "application/gzip",
         }
 
         content_type = extension_map.get(extension)
         return content_type in self.allowed_types if content_type else False
 
-    def get_allowed_extensions(self) -> List[str]:
+    def get_allowed_extensions(self) -> list[str]:
         """Get list of allowed file extensions."""
         extension_map = {
-            'image/png': 'png',
-            'image/jpeg': 'jpg',
-            'image/gif': 'gif',
-            'image/webp': 'webp',
-            'video/mp4': 'mp4',
-            'video/webm': 'webm',
-            'video/avi': 'avi',
-            'application/pdf': 'pdf',
-            'text/html': 'html',
-            'text/plain': 'txt',
-            'application/zip': 'zip',
-            'application/x-tar': 'tar',
-            'application/gzip': 'gz'
+            "image/png": "png",
+            "image/jpeg": "jpg",
+            "image/gif": "gif",
+            "image/webp": "webp",
+            "video/mp4": "mp4",
+            "video/webm": "webm",
+            "video/avi": "avi",
+            "application/pdf": "pdf",
+            "text/html": "html",
+            "text/plain": "txt",
+            "application/zip": "zip",
+            "application/x-tar": "tar",
+            "application/gzip": "gz",
         }
 
         return [extension_map[ct] for ct in self.allowed_types if ct in extension_map]
@@ -383,16 +374,23 @@ def validate_api_key(api_key: str) -> bool:
 def generate_request_id() -> str:
     """Generate unique request ID."""
     import uuid
+
     return str(uuid.uuid4())
 
 
-def mask_sensitive_data(data: dict, sensitive_keys: List[str] = None) -> dict:
+def mask_sensitive_data(data: dict[str, Any], sensitive_keys: Optional[list[str]] = None) -> dict[str, Any]:
     """Mask sensitive data in logs/responses."""
 
     if sensitive_keys is None:
         sensitive_keys = [
-            'password', 'secret', 'token', 'key', 'auth',
-            'authorization', 'credentials', 'private'
+            "password",
+            "secret",
+            "token",
+            "key",
+            "auth",
+            "authorization",
+            "credentials",
+            "private",
         ]
 
     masked_data = data.copy()

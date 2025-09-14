@@ -3,9 +3,9 @@ TestEnvironment model for capturing test execution context.
 Represents browser, OS, and environment configuration for test execution.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Any
 
-from sqlalchemy import String, Index
+from sqlalchemy import Index, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
@@ -23,19 +23,19 @@ class TestEnvironment(BaseModel):
         comment="Environment name (e.g., 'staging', 'production')",
     )
 
-    browser: Mapped[Optional[str]] = mapped_column(
+    browser: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Browser used for testing (e.g., 'chromium', 'firefox')",
     )
 
-    os: Mapped[Optional[str]] = mapped_column(
+    os: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Operating system (e.g., 'ubuntu-22.04', 'macos-13')",
     )
 
-    config_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    config_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Environment-specific configuration and details",
@@ -50,13 +50,9 @@ class TestEnvironment(BaseModel):
     )
 
     # Predefined values for validation
-    ALLOWED_BROWSERS = [
-        "chromium", "chrome", "firefox", "webkit", "safari", "edge", "electron"
-    ]
+    ALLOWED_BROWSERS = ["chromium", "chrome", "firefox", "webkit", "safari", "edge", "electron"]
 
-    ALLOWED_OS_PATTERNS = [
-        "ubuntu", "macos", "windows", "linux", "darwin", "win32"
-    ]
+    ALLOWED_OS_PATTERNS = ["ubuntu", "macos", "windows", "linux", "darwin", "win32"]
 
     @validates("name")
     def validate_name(self, key: str, name: str) -> str:
@@ -70,7 +66,7 @@ class TestEnvironment(BaseModel):
         return name.strip()
 
     @validates("browser")
-    def validate_browser(self, key: str, browser: Optional[str]) -> Optional[str]:
+    def validate_browser(self, key: str, browser: str | None) -> str | None:
         """Validate browser type."""
         if browser is None:
             return None
@@ -81,12 +77,14 @@ class TestEnvironment(BaseModel):
 
         # Check if browser is in allowed list or contains allowed pattern
         if not any(allowed in browser for allowed in self.ALLOWED_BROWSERS):
-            raise ValueError(f"Browser '{browser}' not recognized. Allowed patterns: {self.ALLOWED_BROWSERS}")
+            raise ValueError(
+                f"Browser '{browser}' not recognized. Allowed patterns: {self.ALLOWED_BROWSERS}"
+            )
 
         return browser
 
     @validates("os")
-    def validate_os(self, key: str, os_value: Optional[str]) -> Optional[str]:
+    def validate_os(self, key: str, os_value: str | None) -> str | None:
         """Validate operating system."""
         if os_value is None:
             return None
@@ -97,12 +95,16 @@ class TestEnvironment(BaseModel):
 
         # Check if OS contains allowed pattern
         if not any(allowed in os_value for allowed in self.ALLOWED_OS_PATTERNS):
-            raise ValueError(f"OS '{os_value}' not recognized. Allowed patterns: {self.ALLOWED_OS_PATTERNS}")
+            raise ValueError(
+                f"OS '{os_value}' not recognized. Allowed patterns: {self.ALLOWED_OS_PATTERNS}"
+            )
 
         return os_value
 
     @validates("config_metadata")
-    def validate_config_metadata(self, key: str, config_metadata: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def validate_config_metadata(
+        self, key: str, config_metadata: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
         """Validate config_metadata is a proper dictionary."""
         if config_metadata is None:
             return None
