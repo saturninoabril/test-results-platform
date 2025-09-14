@@ -1,0 +1,96 @@
+# Example usage of the reusable Cypress workflow
+# Copy this file to your repository and customize as needed
+
+name: Cypress E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run tests daily at 3 AM UTC
+    - cron: '0 3 * * *'
+
+jobs:
+  cypress-tests:
+    name: Run Cypress Tests
+    uses: ./.github/workflows/cypress-tests.yml
+    with:
+      api-endpoint: ${{ vars.TEST_RESULTS_API_ENDPOINT }}
+      node-version: '20'
+      cypress-version: '13.6.0'
+      browsers: '["chrome", "firefox", "edge"]'
+      environment-prefix: 'ci-integration'
+      suite-name-prefix: 'Integration Tests'
+      working-directory: '.'
+      results-path: 'cypress/results'
+      upload-artifacts: true
+      additional-tags: 'integration,nightly'
+      record: false  # Set to true if using Cypress Dashboard
+      parallel: false
+    secrets:
+      automation-token: ${{ secrets.TEST_RESULTS_TOKEN }}
+      cypress-record-key: ${{ secrets.CYPRESS_RECORD_KEY }}  # Only if record: true
+
+  # Example: API tests only
+  cypress-api-tests:
+    name: Run API Tests
+    uses: ./.github/workflows/cypress-tests.yml
+    with:
+      api-endpoint: ${{ vars.TEST_RESULTS_API_ENDPOINT }}
+      test-command: 'npx cypress run --spec "cypress/e2e/api/**/*"'
+      browsers: '["chrome"]'
+      environment-prefix: 'ci-api'
+      suite-name-prefix: 'API Tests'
+      additional-tags: 'api,backend'
+    secrets:
+      automation-token: ${{ secrets.TEST_RESULTS_TOKEN }}
+
+  # Example: Component tests
+  cypress-component-tests:
+    name: Run Component Tests
+    uses: ./.github/workflows/cypress-tests.yml
+    with:
+      api-endpoint: ${{ vars.TEST_RESULTS_API_ENDPOINT }}
+      test-command: 'npx cypress run --component'
+      browsers: '["chrome"]'
+      environment-prefix: 'ci-component'
+      suite-name-prefix: 'Component Tests'
+      additional-tags: 'component,unit'
+    secrets:
+      automation-token: ${{ secrets.TEST_RESULTS_TOKEN }}
+
+  # Run tests with Cypress Dashboard recording and parallelization
+  cypress-parallel-tests:
+    name: Run Cypress Tests (Parallel)
+    if: github.event_name == 'schedule'  # Only run parallel tests on schedule
+    uses: ./.github/workflows/cypress-tests.yml
+    with:
+      api-endpoint: ${{ vars.TEST_RESULTS_API_ENDPOINT }}
+      browsers: '["chrome"]'
+      environment-prefix: 'ci-parallel'
+      suite-name-prefix: 'Parallel Tests'
+      record: true
+      parallel: true
+      additional-tags: 'parallel,scheduled'
+    secrets:
+      automation-token: ${{ secrets.TEST_RESULTS_TOKEN }}
+      cypress-record-key: ${{ secrets.CYPRESS_RECORD_KEY }}
+
+  # Report overall status
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [cypress-tests, cypress-api-tests, cypress-component-tests]
+    if: always()
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## 🌲 Cypress Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status | Total Tests | Failed Tests | Results Submitted |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|-------------|--------------|------------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.cypress-tests.result }} | ${{ needs.cypress-tests.outputs.total-tests }} | ${{ needs.cypress-tests.outputs.failed-tests }} | ${{ needs.cypress-tests.outputs.results-submitted }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| API Tests | ${{ needs.cypress-api-tests.result }} | ${{ needs.cypress-api-tests.outputs.total-tests }} | ${{ needs.cypress-api-tests.outputs.failed-tests }} | ${{ needs.cypress-api-tests.outputs.results-submitted }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Component Tests | ${{ needs.cypress-component-tests.result }} | ${{ needs.cypress-component-tests.outputs.total-tests }} | ${{ needs.cypress-component-tests.outputs.failed-tests }} | ${{ needs.cypress-component-tests.outputs.results-submitted }} |" >> $GITHUB_STEP_SUMMARY

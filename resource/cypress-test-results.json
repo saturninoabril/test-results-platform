@@ -1,0 +1,269 @@
+{
+  "stats": {
+    "suites": 2,
+    "tests": 8,
+    "passes": 8,
+    "pending": 0,
+    "failures": 0,
+    "start": "2025-09-01T06:21:14.810Z",
+    "end": "2025-09-01T06:21:36.851Z",
+    "duration": 22041,
+    "testsRegistered": 8,
+    "passPercent": 100,
+    "pendingPercent": 0,
+    "other": 0,
+    "hasOther": false,
+    "skipped": 0,
+    "hasSkipped": false
+  },
+  "results": [
+    {
+      "uuid": "e85537d4-bede-4722-abc9-e93c72a88782",
+      "title": "",
+      "fullFile": "tests/integration/channels/accessibility/accessibility_sidebar_spec.ts",
+      "file": "tests/integration/channels/accessibility/accessibility_sidebar_spec.ts",
+      "beforeHooks": [],
+      "afterHooks": [],
+      "tests": [],
+      "suites": [
+        {
+          "uuid": "8da87bb9-d6ee-497d-bc9a-4b3714cd9b6e",
+          "title": "Verify Accessibility Support in Channel Sidebar Navigation",
+          "fullFile": "",
+          "file": "",
+          "beforeHooks": [],
+          "afterHooks": [],
+          "tests": [
+            {
+              "title": "MM-T1470 Verify Tab Support in Channels section",
+              "fullTitle": "Verify Accessibility Support in Channel Sidebar Navigation MM-T1470 Verify Tab Support in Channels section",
+              "timedOut": null,
+              "duration": 7225,
+              "state": "passed",
+              "speed": "medium",
+              "pass": true,
+              "fail": false,
+              "pending": false,
+              "context": null,
+              "code": "// # Create some Public Channels\nCypress._.times(2, () => {\n    cy.apiCreateChannel(testTeam.id, 'public', 'public');\n});\n// # Wait for few seconds\ncy.wait(_fixtures_timeouts__WEBPACK_IMPORTED_MODULE_0__.ONE_SEC);\n// # Press tab to the Add Public Channel button\ncy.uiGetLHSAddChannelButton().focus().tab().tab({ shift: true });\n// * Verify if the Plus button has focus\ncy.uiGetLHSAddChannelButton().should('be.focused');\ncy.focused().tab();\n// * Verify if the Plus button has focus\ncy.findByRole('button', { name: 'Find Channels' }).should('be.focused');\ncy.focused().tab();\n// * Verify if focus changes to different channels in Unread section\ncy.get('.SidebarChannel.unread').each((el) => {\n    cy.wrap(el).find('.unread-title').should('be.focused');\n    cy.focused().tab().tab();\n});\ncy.focused().parent().next().find('.SidebarChannel').each((el, i) => {\n    if (i === 0) {\n        cy.focused().findByText('CHANNELS');\n        cy.focused().tab().tab();\n    }\n    // * Verify if focus changes to different channels in Channels section\n    cy.wrap(el).find('.SidebarLink').should('be.focused');\n    cy.focused().tab().tab();\n});",
+              "err": {},
+              "uuid": "c8554ed9-b1f8-4b8b-8b40-e8e9486095e3",
+              "parentUUID": "8da87bb9-d6ee-497d-bc9a-4b3714cd9b6e",
+              "isHook": false,
+              "skipped": false
+            },
+            {
+              "title": "MM-T1473 Verify Tab Support in Unreads section",
+              "fullTitle": "Verify Accessibility Support in Channel Sidebar Navigation MM-T1473 Verify Tab Support in Unreads section",
+              "timedOut": null,
+              "duration": 3216,
+              "state": "passed",
+              "speed": "fast",
+              "pass": true,
+              "fail": false,
+              "pending": false,
+              "context": null,
+              "code": "// # Press tab from the Main Menu button\ncy.uiGetLHSAddChannelButton().focus().tab().tab();\n// * Verify if focus changes to different channels in Unread section\ncy.get('.SidebarChannel.unread').each((el) => {\n    cy.wrap(el).find('.unread-title').should('be.focused');\n    cy.focused().tab().tab();\n});",
+              "err": {},
+              "uuid": "106e4091-5b81-45ff-b192-cf153416ed20",
+              "parentUUID": "8da87bb9-d6ee-497d-bc9a-4b3714cd9b6e",
+              "isHook": false,
+              "skipped": false
+            },
+            {
+              "title": "MM-T1474 Verify Tab Support in Favorites section",
+              "fullTitle": "Verify Accessibility Support in Channel Sidebar Navigation MM-T1474 Verify Tab Support in Favorites section",
+              "timedOut": null,
+              "duration": 3664,
+              "state": "passed",
+              "speed": "fast",
+              "pass": true,
+              "fail": false,
+              "pending": false,
+              "context": null,
+              "code": "// # Mark few channels as Favorites\nmarkAsFavorite('off-topic');\nmarkAsFavorite(testChannel.name);\n// # Press tab from the add channel button down to all unread channels\ncy.uiGetLHSAddChannelButton().focus().tab().tab();\ncy.get('.SidebarChannel.unread').each(() => {\n    cy.focused().tab().tab();\n});\n// * Verify if focus changes to different channels in Favorite Channels section\ncy.focused().tab().tab().parent().next().find('.SidebarChannel').each((el, i) => {\n    if (i === 0) {\n        cy.focused().findByText('FAVORITES');\n        cy.focused().tab().tab();\n    }\n    cy.wrap(el).find('.SidebarLink').should('be.focused');\n    cy.focused().tab().tab();\n});",
+              "err": {},
+              "uuid": "80bb3402-70c4-494b-8966-945703be7f97",
+              "parentUUID": "8da87bb9-d6ee-497d-bc9a-4b3714cd9b6e",
+              "isHook": false,
+              "skipped": false
+            },
+            {
+              "title": "MM-T1475 Verify Up & Down Arrow support in Channel Sidebar",
+              "fullTitle": "Verify Accessibility Support in Channel Sidebar Navigation MM-T1475 Verify Up & Down Arrow support in Channel Sidebar",
+              "timedOut": null,
+              "duration": 4078,
+              "state": "passed",
+              "speed": "fast",
+              "pass": true,
+              "fail": false,
+              "pending": false,
+              "context": null,
+              "code": "cy.apiCreateChannel(testTeam.id, 'public', 'Public', 'O');\ncy.apiCreateChannel(testTeam.id, 'private', 'Private', 'P');\n// # Mark few channels as Favorites\nmarkAsFavorite('off-topic');\nmarkAsFavorite(testChannel.name);\n// # Press tab from the Main Menu button\ncy.uiGetLHSAddChannelButton().focus().tab().tab().tab();\n// # Press Down Arrow and then Up Arrow\ncy.get('body').type('{downarrow}{uparrow}');\n// * Verify if Unread Channels section has focus\ncy.uiGetLhsSection('UNREADS').should('be.focused');\n// # Press Down Arrow and check the focus\ncy.get('body').type('{downarrow}');\n// * Verify if Favorite Channels section has focus\ncy.uiGetLhsSection('FAVORITES').should('be.focused');\n// # Press Down Arrow and check the focus\ncy.get('body').type('{downarrow}');\n// * Verify if Public Channels section has focus\ncy.uiGetLhsSection('CHANNELS').should('be.focused');\n// # Press Down Arrow and check the focus\ncy.get('body').type('{downarrow}');\n// * Verify if Direct Messages section has focus\ncy.uiGetLhsSection('DIRECT MESSAGES').should('be.focused');",
+              "err": {},
+              "uuid": "1f647d9e-bb2d-4ac8-b97c-04f698218451",
+              "parentUUID": "8da87bb9-d6ee-497d-bc9a-4b3714cd9b6e",
+              "isHook": false,
+              "skipped": false
+            }
+          ],
+          "suites": [],
+          "passes": [
+            "c8554ed9-b1f8-4b8b-8b40-e8e9486095e3",
+            "106e4091-5b81-45ff-b192-cf153416ed20",
+            "80bb3402-70c4-494b-8966-945703be7f97",
+            "1f647d9e-bb2d-4ac8-b97c-04f698218451"
+          ],
+          "failures": [],
+          "pending": [],
+          "skipped": [],
+          "duration": 18183,
+          "root": false,
+          "rootEmpty": false,
+          "_timeout": 2000
+        },
+        {
+          "uuid": "cfa95ed8-6b87-4105-a0c0-305d1771cbb7",
+          "title": "Accessibility tests for RHS getting focus after buttons actions",
+          "fullFile": "",
+          "file": "",
+          "beforeHooks": [],
+          "afterHooks": [],
+          "tests": [
+            {
+              "title": "Focus should be on RHS when opening Recent Mentions",
+              "fullTitle": "Accessibility tests for RHS getting focus after buttons actions Focus should be on RHS when opening Recent Mentions",
+              "timedOut": null,
+              "duration": 3374,
+              "state": "passed",
+              "speed": "fast",
+              "pass": true,
+              "fail": false,
+              "pending": false,
+              "context": null,
+              "code": "// # Enter key press on the Recent Mentions button\ncy.findByRole('button', { name: /Recent mentions/i }).focus().realPress('Enter');\n// * Verify RHS is open\ncy.get('#sidebar-right').should('be.visible');\n// * Check that the RHS container is focused\ncy.findByLabelText('Expand Sidebar Icon').should('be.focused');",
+              "err": {},
+              "uuid": "fe4ddf12-5b7f-4c47-a6a5-27179356b65b",
+              "parentUUID": "cfa95ed8-6b87-4105-a0c0-305d1771cbb7",
+              "isHook": false,
+              "skipped": false
+            },
+            {
+              "title": "Focus should be on RHS when opening Saved Messages",
+              "fullTitle": "Accessibility tests for RHS getting focus after buttons actions Focus should be on RHS when opening Saved Messages",
+              "timedOut": null,
+              "duration": 65,
+              "state": "passed",
+              "speed": "fast",
+              "pass": true,
+              "fail": false,
+              "pending": false,
+              "context": null,
+              "code": "// # Enter key press on the Saved Messages button\ncy.findByRole('button', { name: /Saved messages/i }).focus().realPress('Enter');\n// * Verify RHS is open\ncy.get('#sidebar-right').should('be.visible');\n// * Check that the RHS container is focused\ncy.findByLabelText('Expand Sidebar Icon').should('be.focused');",
+              "err": {},
+              "uuid": "c5bad023-59fd-4ebe-9e5d-d7fa1f7e0383",
+              "parentUUID": "cfa95ed8-6b87-4105-a0c0-305d1771cbb7",
+              "isHook": false,
+              "skipped": false
+            },
+            {
+              "title": "Focus should be on RHS when opening Members",
+              "fullTitle": "Accessibility tests for RHS getting focus after buttons actions Focus should be on RHS when opening Members",
+              "timedOut": null,
+              "duration": 113,
+              "state": "passed",
+              "speed": "fast",
+              "pass": true,
+              "fail": false,
+              "pending": false,
+              "context": null,
+              "code": "cy.get('#channelHeaderInfo').should('exist');\n// # Enter key press on the Members button\ncy.get('#member_rhs').should('be.visible').focus().realPress('Enter');\n// * Verify RHS is open\ncy.get('#sidebar-right').should('be.visible');\n// * Check that the RHS container is focused\ncy.get('.sidebar-right-container').find('#rhsCloseButton').should('be.focused');",
+              "err": {},
+              "uuid": "3f7a1d1c-8ca0-48ca-86db-4df5e5b909be",
+              "parentUUID": "cfa95ed8-6b87-4105-a0c0-305d1771cbb7",
+              "isHook": false,
+              "skipped": false
+            },
+            {
+              "title": "Focus should be on RHS when opening Channel files",
+              "fullTitle": "Accessibility tests for RHS getting focus after buttons actions Focus should be on RHS when opening Channel files",
+              "timedOut": null,
+              "duration": 61,
+              "state": "passed",
+              "speed": "fast",
+              "pass": true,
+              "fail": false,
+              "pending": false,
+              "context": null,
+              "code": "// # Enter key press on the Channel files button\ncy.findByRole('button', { name: /Channel files/i }).focus().realPress('Enter');\n// * Verify RHS is open\ncy.get('#sidebar-right').should('be.visible');\n// * Check that the RHS container is focused\ncy.findByLabelText('Expand Sidebar Icon').should('be.focused');",
+              "err": {},
+              "uuid": "e53dcac8-1ba2-4d98-992b-548ea3a4c4fd",
+              "parentUUID": "cfa95ed8-6b87-4105-a0c0-305d1771cbb7",
+              "isHook": false,
+              "skipped": false
+            }
+          ],
+          "suites": [],
+          "passes": [
+            "fe4ddf12-5b7f-4c47-a6a5-27179356b65b",
+            "c5bad023-59fd-4ebe-9e5d-d7fa1f7e0383",
+            "3f7a1d1c-8ca0-48ca-86db-4df5e5b909be",
+            "e53dcac8-1ba2-4d98-992b-548ea3a4c4fd"
+          ],
+          "failures": [],
+          "pending": [],
+          "skipped": [],
+          "duration": 3613,
+          "root": false,
+          "rootEmpty": false,
+          "_timeout": 2000
+        }
+      ],
+      "passes": [],
+      "failures": [],
+      "pending": [],
+      "skipped": [],
+      "duration": 0,
+      "root": true,
+      "rootEmpty": true,
+      "_timeout": 2000
+    }
+  ],
+  "meta": {
+    "mocha": {
+      "version": "7.2.0"
+    },
+    "mochawesome": {
+      "options": {
+        "quiet": true,
+        "reportFilename": "json/tests/integration/channels/accessibility/accessibility_sidebar_spec.ts",
+        "saveHtml": false,
+        "saveJson": true,
+        "consoleReporter": "spec",
+        "useInlineDiffs": false,
+        "code": true
+      },
+      "version": "7.1.3"
+    },
+    "marge": {
+      "options": {
+        "id": "default",
+        "reportDir": "results/mochawesome-report",
+        "reportFilename": "json/tests/integration/channels/accessibility/accessibility_sidebar_spec.ts",
+        "quiet": true,
+        "overwrite": false,
+        "html": false,
+        "json": true,
+        "testMeta": {
+          "platform": "linux",
+          "browser": "electron",
+          "headless": true,
+          "branch": "master",
+          "buildId": "1756707358",
+          "testFileAttempt": 1
+        }
+      },
+      "version": "6.2.0"
+    }
+  }
+}

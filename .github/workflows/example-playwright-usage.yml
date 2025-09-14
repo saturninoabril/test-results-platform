@@ -1,0 +1,76 @@
+# Example usage of the reusable Playwright workflow
+# Copy this file to your repository and customize as needed
+
+name: Playwright E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  playwright-tests:
+    name: Run Playwright Tests
+    uses: ./.github/workflows/playwright-tests.yml
+    with:
+      api-endpoint: ${{ vars.TEST_RESULTS_API_ENDPOINT }}
+      node-version: '20'
+      playwright-version: '1.55.0'
+      browsers: '["chromium", "firefox", "webkit"]'
+      environment-prefix: 'ci-e2e'
+      suite-name-prefix: 'E2E Tests'
+      working-directory: '.'
+      results-path: 'test-results'
+      upload-artifacts: true
+      additional-tags: 'nightly,regression'
+    secrets:
+      automation-token: ${{ secrets.TEST_RESULTS_TOKEN }}
+
+  # Example: Run different test suites
+  playwright-smoke-tests:
+    name: Run Smoke Tests
+    uses: ./.github/workflows/playwright-tests.yml
+    with:
+      api-endpoint: ${{ vars.TEST_RESULTS_API_ENDPOINT }}
+      test-command: 'npx playwright test --grep @smoke'
+      browsers: '["chromium"]'
+      environment-prefix: 'ci-smoke'
+      suite-name-prefix: 'Smoke Tests'
+      additional-tags: 'smoke,fast'
+    secrets:
+      automation-token: ${{ secrets.TEST_RESULTS_TOKEN }}
+
+  # Example: Mobile tests
+  playwright-mobile-tests:
+    name: Run Mobile Tests
+    uses: ./.github/workflows/playwright-tests.yml
+    with:
+      api-endpoint: ${{ vars.TEST_RESULTS_API_ENDPOINT }}
+      test-command: 'npx playwright test --project mobile-chrome --project mobile-safari'
+      browsers: '["chromium"]'  # Browser doesn't matter for mobile emulation
+      environment-prefix: 'ci-mobile'
+      suite-name-prefix: 'Mobile Tests'
+      additional-tags: 'mobile,responsive'
+    secrets:
+      automation-token: ${{ secrets.TEST_RESULTS_TOKEN }}
+
+  # Report overall status
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [playwright-tests, playwright-smoke-tests, playwright-mobile-tests]
+    if: always()
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## 🎭 Playwright Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status | Results Submitted |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|------------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| E2E Tests | ${{ needs.playwright-tests.result }} | ${{ needs.playwright-tests.outputs.results-submitted }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Smoke Tests | ${{ needs.playwright-smoke-tests.result }} | ${{ needs.playwright-smoke-tests.outputs.results-submitted }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Mobile Tests | ${{ needs.playwright-mobile-tests.result }} | ${{ needs.playwright-mobile-tests.outputs.results-submitted }} |" >> $GITHUB_STEP_SUMMARY

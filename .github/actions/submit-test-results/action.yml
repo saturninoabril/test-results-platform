@@ -1,0 +1,77 @@
+name: 'Submit Test Results'
+description: 'Submit test results to Test Results Management API'
+author: 'Test Results Management API'
+
+inputs:
+  api-endpoint:
+    description: 'API endpoint URL (e.g., https://test-results.example.com)'
+    required: true
+
+  automation-token:
+    description: 'Bearer token for API authentication'
+    required: true
+
+  framework:
+    description: 'Test framework name and version (e.g., playwright@1.55.0)'
+    required: true
+
+  environment-name:
+    description: 'Environment name (e.g., ci-playwright-chrome)'
+    required: true
+
+  browser:
+    description: 'Browser used for testing'
+    required: false
+    default: 'chrome'
+
+  os:
+    description: 'Operating system'
+    required: false
+    default: 'ubuntu'
+
+  results-file:
+    description: 'Path to test results JSON file'
+    required: true
+
+  suite-name:
+    description: 'Test suite name'
+    required: false
+    default: 'CI Test Suite'
+
+  artifacts-path:
+    description: 'Path to artifacts directory (screenshots, videos, etc.)'
+    required: false
+
+  upload-artifacts:
+    description: 'Whether to upload artifacts (true/false)'
+    required: false
+    default: 'true'
+
+  tags:
+    description: 'Comma-separated list of tags to apply to test results'
+    required: false
+    default: 'ci,automated'
+
+outputs:
+  framework-id:
+    description: 'ID of the created/found framework'
+
+  environment-id:
+    description: 'ID of the created/found environment'
+
+  suite-id:
+    description: 'ID of the created test suite'
+
+  results-count:
+    description: 'Number of test results submitted'
+
+  artifacts-count:
+    description: 'Number of artifacts uploaded'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
+
+branding:
+  icon: 'check-circle'
+  color: 'green'

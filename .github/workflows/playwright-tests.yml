@@ -1,0 +1,219 @@
+name: 'Reusable Playwright Tests'
+
+on:
+  workflow_call:
+    inputs:
+      # Required inputs
+      api-endpoint:
+        description: 'Test Results API endpoint URL'
+        required: true
+        type: string
+
+      node-version:
+        description: 'Node.js version to use'
+        required: false
+        type: string
+        default: '20'
+
+      # Playwright configuration
+      playwright-version:
+        description: 'Playwright version to install'
+        required: false
+        type: string
+        default: 'latest'
+
+      test-command:
+        description: 'Command to run Playwright tests'
+        required: false
+        type: string
+        default: 'npx playwright test'
+
+      browsers:
+        description: 'Browsers to test (json array: ["chromium", "firefox", "webkit"])'
+        required: false
+        type: string
+        default: '["chromium"]'
+
+      # Test configuration
+      environment-prefix:
+        description: 'Prefix for environment names'
+        required: false
+        type: string
+        default: 'ci-playwright'
+
+      suite-name-prefix:
+        description: 'Prefix for suite names'
+        required: false
+        type: string
+        default: 'Playwright Tests'
+
+      working-directory:
+        description: 'Working directory for commands'
+        required: false
+        type: string
+        default: '.'
+
+      # Results configuration
+      results-path:
+        description: 'Path where test results are stored'
+        required: false
+        type: string
+        default: 'test-results'
+
+      upload-artifacts:
+        description: 'Whether to upload test artifacts'
+        required: false
+        type: boolean
+        default: true
+
+      additional-tags:
+        description: 'Additional tags to apply (comma-separated)'
+        required: false
+        type: string
+        default: ''
+
+    secrets:
+      automation-token:
+        description: 'Bearer token for Test Results API'
+        required: true
+
+    outputs:
+      results-submitted:
+        description: 'Whether results were successfully submitted'
+        value: ${{ jobs.playwright-tests.outputs.results-submitted }}
+
+      total-tests:
+        description: 'Total number of tests executed'
+        value: ${{ jobs.playwright-tests.outputs.total-tests }}
+
+      failed-tests:
+        description: 'Number of failed tests'
+        value: ${{ jobs.playwright-tests.outputs.failed-tests }}
+
+jobs:
+  playwright-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: ${{ fromJson(inputs.browsers) }}
+
+    outputs:
+      results-submitted: ${{ steps.submit-results.conclusion == 'success' }}
+      total-tests: ${{ steps.count-results.outputs.total }}
+      failed-tests: ${{ steps.count-results.outputs.failed }}
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+          cache-dependency-path: '${{ inputs.working-directory }}/package-lock.json'
+
+      - name: 📦 Install dependencies
+        working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+
+      - name: 🎭 Install Playwright browsers
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          if [ "${{ inputs.playwright-version }}" = "latest" ]; then
+            npx playwright install --with-deps ${{ matrix.browser }}
+          else
+            npm install @playwright/test@${{ inputs.playwright-version }}
+            npx playwright install --with-deps ${{ matrix.browser }}
+          fi
+
+      - name: 🧪 Run Playwright tests
+        id: run-tests
+        working-directory: ${{ inputs.working-directory }}
+        continue-on-error: true
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          # Create results directory
+          mkdir -p ${{ inputs.results-path }}
+
+          # Run tests with JSON reporter
+          ${{ inputs.test-command }} \
+            --project=${{ matrix.browser }} \
+            --reporter=json:${{ inputs.results-path }}/results-${{ matrix.browser }}.json \
+            --reporter=html:${{ inputs.results-path }}/html-report-${{ matrix.browser }} \
+            || echo "tests_failed=true" >> $GITHUB_OUTPUT
+
+      - name: 📊 Count test results
+        id: count-results
+        if: always()
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          if [ -f "${{ inputs.results-path }}/results-${{ matrix.browser }}.json" ]; then
+            # Extract test counts from Playwright JSON results
+            total=$(jq '[.. | objects | select(has("tests")) | .tests[]] | length' ${{ inputs.results-path }}/results-${{ matrix.browser }}.json 2>/dev/null || echo "0")
+            failed=$(jq '[.. | objects | select(has("tests")) | .tests[] | select(.results[0].status == "failed")] | length' ${{ inputs.results-path }}/results-${{ matrix.browser }}.json 2>/dev/null || echo "0")
+
+            echo "total=$total" >> $GITHUB_OUTPUT
+            echo "failed=$failed" >> $GITHUB_OUTPUT
+            echo "📊 Test Results: $total total, $failed failed"
+          else
+            echo "total=0" >> $GITHUB_OUTPUT
+            echo "failed=0" >> $GITHUB_OUTPUT
+            echo "⚠️ No results file found"
+          fi
+
+      - name: 📤 Submit test results
+        id: submit-results
+        if: always() && hashFiles('${{ inputs.working-directory }}/${{ inputs.results-path }}/results-${{ matrix.browser }}.json') != ''
+        uses: ./.github/actions/submit-test-results
+        with:
+          api-endpoint: ${{ inputs.api-endpoint }}
+          automation-token: ${{ secrets.automation-token }}
+          framework: 'playwright@${{ inputs.playwright-version }}'
+          environment-name: '${{ inputs.environment-prefix }}-${{ matrix.browser }}-ubuntu'
+          browser: ${{ matrix.browser }}
+          os: 'ubuntu'
+          results-file: '${{ inputs.working-directory }}/${{ inputs.results-path }}/results-${{ matrix.browser }}.json'
+          suite-name: '${{ inputs.suite-name-prefix }} - ${{ matrix.browser }} - ${{ github.ref_name }}'
+          artifacts-path: '${{ inputs.working-directory }}/${{ inputs.results-path }}'
+          upload-artifacts: ${{ inputs.upload-artifacts }}
+          tags: 'e2e,playwright,${{ matrix.browser }},ubuntu,${{ github.ref_name }}${{ inputs.additional-tags && format(",{0}", inputs.additional-tags) || "" }}'
+
+      - name: 📋 Log submission results
+        if: always() && steps.submit-results.conclusion != 'skipped'
+        run: |
+          echo "🎯 Results Submission Summary:"
+          echo "  Framework ID: ${{ steps.submit-results.outputs.framework-id }}"
+          echo "  Environment ID: ${{ steps.submit-results.outputs.environment-id }}"
+          echo "  Suite ID: ${{ steps.submit-results.outputs.suite-id }}"
+          echo "  Results Count: ${{ steps.submit-results.outputs.results-count }}"
+          echo "  Artifacts Count: ${{ steps.submit-results.outputs.artifacts-count }}"
+
+      - name: 📎 Upload GitHub Actions artifacts
+        if: always() && inputs.upload-artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results-${{ matrix.browser }}
+          path: |
+            ${{ inputs.working-directory }}/${{ inputs.results-path }}/
+            !${{ inputs.working-directory }}/${{ inputs.results-path }}/**/*.mp4
+          retention-days: 7
+
+      - name: 🎬 Upload videos separately (if any)
+        if: always() && inputs.upload-artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-videos-${{ matrix.browser }}
+          path: ${{ inputs.working-directory }}/${{ inputs.results-path }}/**/*.mp4
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: ❌ Fail job if tests failed
+        if: steps.run-tests.outputs.tests_failed == 'true'
+        run: |
+          echo "❌ Tests failed for ${{ matrix.browser }}"
+          exit 1

@@ -1,0 +1,1274 @@
+openapi: 3.0.3
+info:
+  title: Test Results Management API
+  description: |
+    REST API for CRUD operations on end-to-end test execution results.
+    Primary integration via GitHub Actions CI/CD pipelines using bearer token authentication.
+
+    ## Authentication
+    All endpoints require JWT bearer token authentication. Tokens are obtained through
+    GitHub SSO for human users or generated for automated systems (CI/CD pipelines).
+
+    ## Integration Patterns
+    - **GitHub Actions**: Use bearer tokens stored in repository/organization secrets
+    - **CI/CD Systems**: Automated test result submission with artifact upload
+    - **Development**: Local testing with personal access tokens
+  version: 0.4.0
+  contact:
+    name: Development Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  - url: https://api.testresults.dev
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TestFramework:
+      type: object
+      required: [name, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+          maxLength: 50
+          example: "playwright"
+        version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+          example: "1.40.0"
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+
+    TestEnvironment:
+      type: object
+      required: [name]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+          example: "staging"
+        browser:
+          type: string
+          enum: [chromium, firefox, webkit, chrome, edge]
+          example: "chromium"
+        os:
+          type: string
+          enum: [ubuntu-22.04, ubuntu-20.04, macos-13, macos-12, windows-2022, windows-2019]
+          example: "ubuntu-22.04"
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+
+    TestSuite:
+      type: object
+      required: [name, framework_id, environment_id, total_tests, passed_tests, failed_tests, skipped_tests, duration_ms, started_at, completed_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+          example: "Login Flow Tests"
+        framework_id:
+          type: string
+          format: uuid
+        environment_id:
+          type: string
+          format: uuid
+        total_tests:
+          type: integer
+          minimum: 0
+          example: 25
+        passed_tests:
+          type: integer
+          minimum: 0
+          example: 20
+        failed_tests:
+          type: integer
+          minimum: 0
+          example: 3
+        skipped_tests:
+          type: integer
+          minimum: 0
+          example: 2
+        duration_ms:
+          type: integer
+          minimum: 0
+          example: 45000
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+
+    TestResult:
+      type: object
+      required: [suite_id, test_name, full_title, status, duration_ms]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        suite_id:
+          type: string
+          format: uuid
+        test_name:
+          type: string
+          maxLength: 500
+          example: "manages focus when opening and closing settings modal with keyboard"
+        full_title:
+          type: string
+          maxLength: 1000
+          example: "Accessibility Support > Settings Dialog > manages focus when opening and closing settings modal with keyboard"
+        status:
+          type: string
+          enum: [passed, failed, skipped, pending]
+          example: "passed"
+        duration_ms:
+          type: integer
+          minimum: 0
+          example: 3971
+        error_message:
+          type: string
+          nullable: true
+          example: "Expected element to be visible"
+        stack_trace:
+          type: string
+          nullable: true
+          example: "Error: Expected element to be visible\\n    at test/settings.spec.ts:25:5"
+        retry_count:
+          type: integer
+          minimum: 0
+          default: 0
+          example: 0
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 20
+          example: ["accessibility", "settings"]
+        external_id:
+          type: string
+          nullable: true
+          example: "c27dc2d4fd7579bfae82-84088ebe5b793a8b0db8"
+        metadata:
+          type: object
+          additionalProperties: true
+          example:
+            projectId: "ipad"
+            projectName: "ipad"
+            workerIndex: 1
+            parallelIndex: 0
+            file: "accessibility/channels/settings_dialog/settings.spec.ts"
+            line: 9
+            column: 5
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+
+    TestArtifact:
+      type: object
+      required: [artifact_type, file_name, file_size, mime_type]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        result_id:
+          type: string
+          format: uuid
+          nullable: true
+        suite_id:
+          type: string
+          format: uuid
+          nullable: true
+        artifact_type:
+          type: string
+          enum: [screenshot, video, report, log, trace, other]
+          example: "screenshot"
+        file_name:
+          type: string
+          maxLength: 255
+          example: "login-test-failure.png"
+        file_size:
+          type: integer
+          minimum: 1
+          maximum: 104857600
+          example: 245760
+        mime_type:
+          type: string
+          example: "image/png"
+        storage_key:
+          type: string
+          readOnly: true
+          example: "2025/09/14/001-suite-uuid/screenshot-001.png"
+        storage_url:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+          example: "https://s3.amazonaws.com/test-artifacts/..."
+        checksum:
+          type: string
+          readOnly: true
+          example: "sha256:abcd1234..."
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+
+    PaginatedTestResults:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestResult'
+        total:
+          type: integer
+          example: 150
+        page:
+          type: integer
+          example: 1
+        size:
+          type: integer
+          example: 20
+        pages:
+          type: integer
+          example: 8
+
+    PaginatedTestSuites:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestSuite'
+        total:
+          type: integer
+          example: 50
+        page:
+          type: integer
+          example: 1
+        size:
+          type: integer
+          example: 20
+        pages:
+          type: integer
+          example: 3
+
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: "Resource not found"
+        code:
+          type: string
+          example: "RESOURCE_NOT_FOUND"
+        field:
+          type: string
+          example: "suite_id"
+
+paths:
+  # Test Frameworks
+  /frameworks:
+    get:
+      summary: List test frameworks
+      tags: [Frameworks]
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+          description: Filter by framework name
+      responses:
+        '200':
+          description: List of test frameworks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TestFramework'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Create test framework
+      tags: [Frameworks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestFramework'
+      responses:
+        '201':
+          description: Framework created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestFramework'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Framework already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /frameworks/{framework_id}:
+    get:
+      summary: Get test framework
+      tags: [Frameworks]
+      parameters:
+        - name: framework_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Framework details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestFramework'
+        '404':
+          description: Framework not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      summary: Update test framework
+      tags: [Frameworks]
+      parameters:
+        - name: framework_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestFramework'
+      responses:
+        '200':
+          description: Framework updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestFramework'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Framework not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Delete test framework
+      tags: [Frameworks]
+      parameters:
+        - name: framework_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Framework deleted successfully
+        '404':
+          description: Framework not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Cannot delete framework with existing suites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Test Environments
+  /environments:
+    get:
+      summary: List test environments
+      tags: [Environments]
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+          description: Filter by environment name
+        - name: browser
+          in: query
+          schema:
+            type: string
+          description: Filter by browser type
+      responses:
+        '200':
+          description: List of test environments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TestEnvironment'
+
+    post:
+      summary: Create test environment
+      tags: [Environments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestEnvironment'
+      responses:
+        '201':
+          description: Environment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestEnvironment'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /environments/{environment_id}:
+    get:
+      summary: Get test environment
+      tags: [Environments]
+      parameters:
+        - name: environment_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Environment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestEnvironment'
+        '404':
+          description: Environment not found
+
+    put:
+      summary: Update test environment
+      tags: [Environments]
+      parameters:
+        - name: environment_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestEnvironment'
+      responses:
+        '200':
+          description: Environment updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestEnvironment'
+
+    delete:
+      summary: Delete test environment
+      tags: [Environments]
+      parameters:
+        - name: environment_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Environment deleted successfully
+        '409':
+          description: Cannot delete environment with existing suites
+
+  # Test Suites
+  /suites:
+    get:
+      summary: List test suites
+      tags: [Suites]
+      parameters:
+        - name: framework_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by framework
+        - name: environment_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by environment
+        - name: name
+          in: query
+          schema:
+            type: string
+          description: Filter by suite name
+        - name: started_after
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter suites started after this date
+        - name: started_before
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter suites started before this date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of test suites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTestSuites'
+
+    post:
+      summary: Create test suite
+      tags: [Suites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestSuite'
+      responses:
+        '201':
+          description: Suite created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestSuite'
+        '400':
+          description: Invalid input
+
+  /suites/{suite_id}:
+    get:
+      summary: Get test suite
+      tags: [Suites]
+      parameters:
+        - name: suite_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Suite details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestSuite'
+        '404':
+          description: Suite not found
+
+    put:
+      summary: Update test suite
+      tags: [Suites]
+      parameters:
+        - name: suite_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestSuite'
+      responses:
+        '200':
+          description: Suite updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestSuite'
+
+    delete:
+      summary: Delete test suite
+      tags: [Suites]
+      parameters:
+        - name: suite_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Suite deleted successfully
+        '404':
+          description: Suite not found
+
+  # Test Results
+  /results:
+    get:
+      summary: List test results
+      tags: [Results]
+      parameters:
+        - name: suite_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by test suite
+        - name: test_name
+          in: query
+          schema:
+            type: string
+          description: Filter by test name (partial match)
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [passed, failed, skipped]
+          description: Filter by test status
+        - name: created_after
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter results created after this date
+        - name: created_before
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter results created before this date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of test results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTestResults'
+
+    post:
+      summary: Create test result
+      tags: [Results]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestResult'
+      responses:
+        '201':
+          description: Result created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestResult'
+        '400':
+          description: Invalid input
+
+  /results/bulk:
+    post:
+      summary: Create multiple test results
+      tags: [Results]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TestResult'
+              maxItems: 1000
+      responses:
+        '201':
+          description: Results created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created_count:
+                    type: integer
+                    example: 25
+                  failed_count:
+                    type: integer
+                    example: 2
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index:
+                          type: integer
+                        error:
+                          type: string
+        '400':
+          description: Invalid input
+
+  /results/{result_id}:
+    get:
+      summary: Get test result
+      tags: [Results]
+      parameters:
+        - name: result_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Result details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestResult'
+        '404':
+          description: Result not found
+
+    put:
+      summary: Update test result
+      tags: [Results]
+      parameters:
+        - name: result_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestResult'
+      responses:
+        '200':
+          description: Result updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestResult'
+
+    delete:
+      summary: Delete test result
+      tags: [Results]
+      parameters:
+        - name: result_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Result deleted successfully
+        '404':
+          description: Result not found
+
+  # Authentication
+  /auth/github:
+    get:
+      summary: GitHub OAuth login
+      tags: [Authentication]
+      security: []
+      responses:
+        '302':
+          description: Redirect to GitHub OAuth
+        '400':
+          description: Invalid OAuth configuration
+
+  /auth/callback:
+    get:
+      summary: GitHub OAuth callback
+      tags: [Authentication]
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                    example: "Bearer"
+                  expires_in:
+                    type: integer
+                    example: 3600
+        '400':
+          description: Authentication failed
+
+  /auth/me:
+    get:
+      summary: Get current user info
+      tags: [Authentication]
+      responses:
+        '200':
+          description: Current user information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  username:
+                    type: string
+                  email:
+                    type: string
+                  role:
+                    type: string
+                    enum: [admin, user, readonly]
+                  token_type:
+                    type: string
+                    enum: [user, automation, ci]
+                    description: Type of token being used
+        '401':
+          description: Authentication required
+
+  /auth/token:
+    post:
+      summary: Generate automation token
+      description: Generate bearer token for CI/CD and automation use
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, scope]
+              properties:
+                name:
+                  type: string
+                  example: "GitHub Actions - my-repo"
+                  description: Descriptive name for the token
+                scope:
+                  type: string
+                  enum: [read, write, admin]
+                  description: Token permission scope
+                expires_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 365
+                  default: 90
+                  description: Token expiration in days
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  example:
+                    repository: "owner/repo"
+                    workflow: "test.yml"
+      responses:
+        '201':
+          description: Token created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  token_id:
+                    type: string
+                    format: uuid
+                  expires_at:
+                    type: string
+                    format: date-time
+                  scope:
+                    type: string
+                    enum: [read, write, admin]
+        '403':
+          description: Insufficient permissions to create tokens
+
+  /auth/tokens:
+    get:
+      summary: List user's tokens
+      tags: [Authentication]
+      responses:
+        '200':
+          description: List of active tokens
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    token_id:
+                      type: string
+                      format: uuid
+                    name:
+                      type: string
+                    scope:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date-time
+                    expires_at:
+                      type: string
+                      format: date-time
+                    last_used:
+                      type: string
+                      format: date-time
+                      nullable: true
+
+  /auth/tokens/{token_id}:
+    delete:
+      summary: Revoke token
+      tags: [Authentication]
+      parameters:
+        - name: token_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Token revoked successfully
+        '404':
+          description: Token not found
+
+  # Artifacts
+  /artifacts:
+    get:
+      summary: List test artifacts
+      tags: [Artifacts]
+      parameters:
+        - name: result_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by test result
+        - name: suite_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by test suite
+        - name: artifact_type
+          in: query
+          schema:
+            type: string
+            enum: [screenshot, video, report, log, trace, other]
+          description: Filter by artifact type
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: List of test artifacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TestArtifact'
+
+    post:
+      summary: Upload test artifact
+      tags: [Artifacts]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, artifact_type]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Artifact file to upload
+                result_id:
+                  type: string
+                  format: uuid
+                  description: Associated test result (optional)
+                suite_id:
+                  type: string
+                  format: uuid
+                  description: Associated test suite (optional)
+                artifact_type:
+                  type: string
+                  enum: [screenshot, video, report, log, trace, other]
+                metadata:
+                  type: string
+                  description: JSON metadata for the artifact
+      responses:
+        '201':
+          description: Artifact uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestArtifact'
+        '400':
+          description: Invalid upload parameters
+        '413':
+          description: File too large (max 100MB)
+
+  /artifacts/{artifact_id}:
+    get:
+      summary: Get artifact metadata
+      tags: [Artifacts]
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Artifact metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestArtifact'
+        '404':
+          description: Artifact not found
+
+    delete:
+      summary: Delete test artifact
+      tags: [Artifacts]
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Artifact deleted successfully
+        '404':
+          description: Artifact not found
+
+  /artifacts/{artifact_id}/download:
+    get:
+      summary: Download test artifact
+      tags: [Artifacts]
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: expires_in
+          in: query
+          schema:
+            type: integer
+            minimum: 300
+            maximum: 86400
+            default: 3600
+          description: Signed URL expiration time in seconds
+      responses:
+        '302':
+          description: Redirect to signed S3 URL
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+              description: Signed S3 URL for direct download
+        '404':
+          description: Artifact not found
+
+  /artifacts/cleanup:
+    post:
+      summary: Clean up expired artifacts
+      tags: [Artifacts]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cleanup completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_count:
+                    type: integer
+                    example: 25
+                  storage_freed:
+                    type: integer
+                    description: Bytes freed
+                    example: 1048576
+        '403':
+          description: Admin access required
+
+tags:
+  - name: Frameworks
+    description: Test framework management
+  - name: Environments
+    description: Test environment management
+  - name: Suites
+    description: Test suite management
+  - name: Results
+    description: Test result management
+  - name: Artifacts
+    description: Test artifact management
+  - name: Authentication
+    description: User authentication and authorization

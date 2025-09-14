@@ -1,0 +1,143 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 17 for metadata storage
+  postgres:
+    image: postgres:17-alpine
+    container_name: test-results-postgres
+    environment:
+      POSTGRES_DB: test_results
+      POSTGRES_USER: test_results_user
+      POSTGRES_PASSWORD: test_results_password
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_results_user -d test_results"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-results-network
+
+  # MinIO for S3-compatible development storage
+  minio:
+    image: minio/minio:latest
+    container_name: test-results-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"  # API port
+      - "9002:9001"  # Console port (changed to avoid conflict)
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - test-results-network
+
+  # MinIO bucket initialization
+  minio-init:
+    image: minio/mc:latest
+    container_name: test-results-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin123;
+      mc mb myminio/test-artifacts || true;
+      mc mb myminio/dev-artifacts || true;
+      mc mb myminio/staging-artifacts || true;
+      mc policy set public myminio/test-artifacts;
+      mc policy set private myminio/dev-artifacts;
+      mc policy set private myminio/staging-artifacts;
+      echo 'MinIO buckets initialized successfully';
+      "
+    networks:
+      - test-results-network
+
+  # Redis for session storage and caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: test-results-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - test-results-network
+
+  # Test Results API application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: test-results-api
+    environment:
+      # Database configuration
+      DATABASE_URL: postgresql+asyncpg://test_results_user:test_results_password@postgres:5432/test_results
+
+      # Storage configuration
+      STORAGE_TYPE: minio
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_BUCKET_PREFIX: dev
+
+      # Authentication configuration
+      JWT_SECRET_KEY: dev-secret-key-change-in-production
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRATION_HOURS: 24
+
+      # GitHub OAuth configuration (set these in .env file)
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+
+      # Application configuration
+      ENV: development
+      DEBUG: true
+      LOG_LEVEL: info
+
+      # Redis configuration
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - test-results-network
+    profiles:
+      - api  # Only start with docker-compose --profile api up
+
+volumes:
+  postgres_data:
+    driver: local
+  minio_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  test-results-network:
+    driver: bridge

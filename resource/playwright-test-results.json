@@ -1,0 +1,1000 @@
+{
+  "config": {
+    "configFile": "/mattermost/e2e-tests/playwright/playwright.config.ts",
+    "rootDir": "/mattermost/e2e-tests/playwright/specs",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": "/mattermost/e2e-tests/playwright/global_setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        {
+          "open": "never",
+          "outputFolder": "./results/reporter"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "./results/reporter/results.json"
+        }
+      ],
+      [
+        "junit",
+        {
+          "outputFile": "./results/reporter/results.xml"
+        }
+      ],
+      [
+        "list",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/mattermost/e2e-tests/playwright/results/output",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "setup",
+        "name": "setup",
+        "testDir": "/mattermost/e2e-tests/playwright/specs",
+        "testIgnore": [],
+        "testMatch": [
+          "/test_setup\\.ts/"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/mattermost/e2e-tests/playwright/results/output",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "ipad",
+        "name": "ipad",
+        "testDir": "/mattermost/e2e-tests/playwright/specs",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/mattermost/e2e-tests/playwright/results/output",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chrome",
+        "name": "chrome",
+        "testDir": "/mattermost/e2e-tests/playwright/specs",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/mattermost/e2e-tests/playwright/results/output",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "/mattermost/e2e-tests/playwright/specs",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.55.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "test_setup.ts",
+      "file": "test_setup.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "ensure plugins are loaded",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "setup",
+              "projectName": "setup",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 399,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:08:23.806Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6563680aaff571b06541-cea9af50f46ee95e2f56",
+          "file": "test_setup.ts",
+          "line": 6,
+          "column": 6
+        },
+        {
+          "title": "ensure server deployment",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "setup",
+              "projectName": "setup",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 357,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:08:24.263Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6563680aaff571b06541-a1bde0bb5e31c9624004",
+          "file": "test_setup.ts",
+          "line": 11,
+          "column": 6
+        }
+      ]
+    },
+    {
+      "title": "accessibility/channels/settings_dialog/settings.spec.ts",
+      "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "manages focus when opening and closing settings modal with keyboard",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "ipad",
+              "projectName": "ipad",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3971,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:08:25.116Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-84088ebe5b793a8b0db8",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 9,
+          "column": 5
+        },
+        {
+          "title": "navigates between settings tabs using arrow keys",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "ipad",
+              "projectName": "ipad",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2965,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:08:29.130Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-0c4fcc94cc59bd81dcaa",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 56,
+          "column": 5
+        },
+        {
+          "title": "passes accessibility scan on notifications settings panel",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "ipad",
+              "projectName": "ipad",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3064,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:08:32.100Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-b56dd53696317a97121f",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 115,
+          "column": 5
+        },
+        {
+          "title": "passes accessibility scan on display settings panel",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "ipad",
+              "projectName": "ipad",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3462,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:08:35.170Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-2209b499d060e88d9b64",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 159,
+          "column": 5
+        },
+        {
+          "title": "passes accessibility scan on sidebar settings panel",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "ipad",
+              "projectName": "ipad",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3406,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:08:38.640Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-cb8213de6c907e0f3004",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 208,
+          "column": 5
+        },
+        {
+          "title": "passes accessibility scan on advanced settings panel",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "ipad",
+              "projectName": "ipad",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3361,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:08:42.052Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-0e2149afd4635888f359",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 257,
+          "column": 5
+        },
+        {
+          "title": "manages focus when opening and closing settings modal with keyboard",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chrome",
+              "projectName": "chrome",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3676,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:08:53.257Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-057d1be3e3ad81ea8f0b",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 9,
+          "column": 5
+        },
+        {
+          "title": "navigates between settings tabs using arrow keys",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chrome",
+              "projectName": "chrome",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2848,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:08:56.976Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-7274c1c425ca6d4b41ac",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 56,
+          "column": 5
+        },
+        {
+          "title": "passes accessibility scan on notifications settings panel",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chrome",
+              "projectName": "chrome",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2929,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:08:59.829Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-5823d9bb7b6d4aab963f",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 115,
+          "column": 5
+        },
+        {
+          "title": "passes accessibility scan on display settings panel",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chrome",
+              "projectName": "chrome",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3285,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:09:02.764Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-63b9816c00f99df314cd",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 159,
+          "column": 5
+        },
+        {
+          "title": "passes accessibility scan on sidebar settings panel",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chrome",
+              "projectName": "chrome",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3325,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:09:06.054Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-f5d98c0a9f7152a27341",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 208,
+          "column": 5
+        },
+        {
+          "title": "passes accessibility scan on advanced settings panel",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chrome",
+              "projectName": "chrome",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3414,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:09:09.386Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-7af2e6a53b9297c10893",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 257,
+          "column": 5
+        },
+        {
+          "title": "manages focus when opening and closing settings modal with keyboard",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "firefox",
+              "projectName": "firefox",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4328,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:09:20.567Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-fa761b7b5561eb6f2e3f",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 9,
+          "column": 5
+        },
+        {
+          "title": "navigates between settings tabs using arrow keys",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "firefox",
+              "projectName": "firefox",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3169,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:09:25.177Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-fb9cf30360ea4611a965",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 56,
+          "column": 5
+        },
+        {
+          "title": "passes accessibility scan on notifications settings panel",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "firefox",
+              "projectName": "firefox",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3242,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:09:28.356Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-0a5d5afb842ef57db737",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 115,
+          "column": 5
+        },
+        {
+          "title": "passes accessibility scan on display settings panel",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "firefox",
+              "projectName": "firefox",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3552,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:09:31.604Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-a5f7c5fe1e050a0f3337",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 159,
+          "column": 5
+        },
+        {
+          "title": "passes accessibility scan on sidebar settings panel",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "firefox",
+              "projectName": "firefox",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3562,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:09:35.163Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-f25d8cd57d4b07e9ef4e",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 208,
+          "column": 5
+        },
+        {
+          "title": "passes accessibility scan on advanced settings panel",
+          "ok": true,
+          "tags": [
+            "accessibility",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "firefox",
+              "projectName": "firefox",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3779,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:09:38.732Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c27dc2d4fd7579bfae82-62eb3d6713b4ddd9779d",
+          "file": "accessibility/channels/settings_dialog/settings.spec.ts",
+          "line": 257,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "visual/channels/settings_dialog/settings_dialog.spec.ts",
+      "file": "visual/channels/settings_dialog/settings_dialog.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "settings modal visual check",
+          "ok": true,
+          "tags": [
+            "visual",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "ipad",
+              "projectName": "ipad",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7325,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:08:45.423Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1fd31479118e03974689-a894f7be4f8e8ad084f8",
+          "file": "visual/channels/settings_dialog/settings_dialog.spec.ts",
+          "line": 9,
+          "column": 5
+        },
+        {
+          "title": "settings modal visual check",
+          "ok": true,
+          "tags": [
+            "visual",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chrome",
+              "projectName": "chrome",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7244,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:09:12.810Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1fd31479118e03974689-778578d2da835769555c",
+          "file": "visual/channels/settings_dialog/settings_dialog.spec.ts",
+          "line": 9,
+          "column": 5
+        },
+        {
+          "title": "settings modal visual check",
+          "ok": true,
+          "tags": [
+            "visual",
+            "settings"
+          ],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "firefox",
+              "projectName": "firefox",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7099,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-09-13T22:09:42.522Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1fd31479118e03974689-15ba2f189fd5dd39747c",
+          "file": "visual/channels/settings_dialog/settings_dialog.spec.ts",
+          "line": 9,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-09-13T22:08:22.754Z",
+    "duration": 87263.91,
+    "expected": 23,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}
