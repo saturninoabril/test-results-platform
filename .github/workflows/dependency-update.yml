@@ -1,0 +1,140 @@
+name: Dependency Update
+
+on:
+  schedule:
+    # Run every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dependencies:
+    name: Update Dependencies
+    runs-on: ubuntu-latest
+    # Only run on trusted repository, not forks
+    if: github.repository_owner == 'saturninoabril'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
+
+    - name: Update dependencies
+      id: update
+      run: |
+        echo "📦 Updating dependencies..."
+
+        # Create a backup of the current lock file
+        cp uv.lock uv.lock.backup
+
+        # Update dependencies
+        uv lock --upgrade
+
+        # Check if there are changes
+        if ! cmp -s uv.lock uv.lock.backup; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+          echo "✅ Dependencies updated"
+
+          # Show what changed
+          echo "📋 Dependency changes:"
+          echo "changes_summary<<EOF" >> $GITHUB_OUTPUT
+          echo "## Dependency Updates" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "The following dependencies have been updated:" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo '```' >> $GITHUB_OUTPUT
+          # This is a simplified diff - in production you might want more detailed analysis
+          echo "Lock file has been updated with latest compatible versions" >> $GITHUB_OUTPUT
+          echo '```' >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "Please review the changes and ensure all tests pass before merging." >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          echo "changes=false" >> $GITHUB_OUTPUT
+          echo "ℹ️ No dependency updates available"
+        fi
+
+        # Clean up backup
+        rm uv.lock.backup
+
+    - name: Install updated dependencies and run tests
+      if: steps.update.outputs.changes == 'true'
+      run: |
+        echo "🧪 Testing updated dependencies..."
+        uv sync --extra dev
+
+        # Run a quick smoke test to ensure basic functionality
+        echo "Running smoke tests..."
+        uv run python -c "import src.main; print('✅ Main module imports successfully')"
+
+        # Run unit tests to catch any breaking changes
+        echo "Running unit tests..."
+        uv run python -m pytest tests/unit/ -x --tb=short
+
+    - name: Create Pull Request
+      if: steps.update.outputs.changes == 'true'
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: |
+          chore(deps): update dependencies
+
+          Automated dependency update via GitHub Actions.
+
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+        title: 'chore(deps): automated dependency update'
+        body: |
+          ${{ steps.update.outputs.changes_summary }}
+
+          ## Automated Dependency Update
+
+          This PR was automatically created to update project dependencies to their latest compatible versions.
+
+          ### What's Changed
+          - Updated `uv.lock` with latest dependency versions
+          - All unit tests pass with updated dependencies
+
+          ### Review Checklist
+          - [ ] Review dependency changes for security implications
+          - [ ] Ensure all CI checks pass
+          - [ ] Test critical functionality manually if needed
+          - [ ] Check for any breaking changes in updated packages
+
+          ### Merge Instructions
+          This PR can be safely merged if all CI checks pass and no breaking changes are detected.
+
+          ---
+
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+
+          Co-Authored-By: Claude <noreply@anthropic.com>
+        branch: automated/dependency-update
+        delete-branch: true
+        labels: |
+          dependencies
+          automated
+          chore
+
+    - name: Summary
+      run: |
+        if [ "${{ steps.update.outputs.changes }}" == "true" ]; then
+          echo "✅ Dependency update PR created successfully"
+          echo "🔗 Check the Pull Requests tab for the new PR"
+        else
+          echo "ℹ️ No dependency updates were needed"
+          echo "📦 All dependencies are already up to date"
+        fi

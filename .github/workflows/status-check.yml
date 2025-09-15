@@ -1,0 +1,219 @@
+name: Status Check
+
+on:
+  pull_request_target:
+    branches: [ main, release/* ]
+    types: [ opened, synchronize, reopened ]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  status-summary:
+    name: Status Summary
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+
+    - name: Get PR information
+      id: pr-info
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: pr } = await github.rest.pulls.get({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number,
+          });
+
+          return {
+            title: pr.title,
+            author: pr.user.login,
+            draft: pr.draft,
+            mergeable: pr.mergeable,
+            commits: pr.commits,
+            additions: pr.additions,
+            deletions: pr.deletions,
+            changed_files: pr.changed_files
+          };
+
+    - name: Check if PR follows conventions
+      id: conventions
+      run: |
+        echo "Checking PR conventions..."
+
+        PR_TITLE="${{ fromJson(steps.pr-info.outputs.result).title }}"
+        echo "PR Title: $PR_TITLE"
+
+        # Check if title follows conventional commits
+        if echo "$PR_TITLE" | grep -qE "^(feat|fix|docs|style|refactor|test|chore|ci|build|perf|revert)(\(.+\))?: .+"; then
+          echo "title_check=✅ Title follows conventional commits format" >> $GITHUB_OUTPUT
+          echo "conventional_commits=true" >> $GITHUB_OUTPUT
+        else
+          echo "title_check=⚠️  Title should follow conventional commits format (feat/fix/docs/etc: description)" >> $GITHUB_OUTPUT
+          echo "conventional_commits=false" >> $GITHUB_OUTPUT
+        fi
+
+        # Check PR size
+        ADDITIONS=${{ fromJson(steps.pr-info.outputs.result).additions }}
+        DELETIONS=${{ fromJson(steps.pr-info.outputs.result).deletions }}
+        TOTAL_CHANGES=$((ADDITIONS + DELETIONS))
+
+        if [ $TOTAL_CHANGES -le 200 ]; then
+          echo "size_check=✅ Small PR (${TOTAL_CHANGES} lines changed)" >> $GITHUB_OUTPUT
+          echo "size_status=small" >> $GITHUB_OUTPUT
+        elif [ $TOTAL_CHANGES -le 500 ]; then
+          echo "size_check=⚠️  Medium PR (${TOTAL_CHANGES} lines changed)" >> $GITHUB_OUTPUT
+          echo "size_status=medium" >> $GITHUB_OUTPUT
+        else
+          echo "size_check=⚠️  Large PR (${TOTAL_CHANGES} lines changed) - consider breaking into smaller PRs" >> $GITHUB_OUTPUT
+          echo "size_status=large" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create status comment
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const prInfo = ${{ steps.pr-info.outputs.result }};
+          const isDraft = prInfo.draft;
+          const titleCheck = `${{ steps.conventions.outputs.title_check }}`;
+          const sizeCheck = `${{ steps.conventions.outputs.size_check }}`;
+
+          const body = `## 📋 PR Status Summary
+
+          ### 📊 PR Information
+          - **Author**: @${prInfo.author}
+          - **Status**: ${isDraft ? '🚧 Draft' : '🔍 Ready for Review'}
+          - **Files Changed**: ${prInfo.changed_files}
+          - **Lines**: +${prInfo.additions} -${prInfo.deletions}
+
+          ### ✅ Checks
+          - **Title Format**: ${titleCheck}
+          - **PR Size**: ${sizeCheck}
+          - **Mergeable**: ${prInfo.mergeable ? '✅ Ready to merge' : '❌ Merge conflicts detected'}
+
+          ### 🧪 Test Status
+          Status will be updated automatically when CI workflows complete.
+
+          ### 📝 Review Guidelines
+          - Ensure all CI checks pass before requesting review
+          - Add tests for new functionality
+          - Update documentation if needed
+          - Follow the project's coding standards
+
+          ---
+          *This comment will be automatically updated as checks complete.*
+          `;
+
+          // Get existing comments
+          const comments = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          // Find existing status comment
+          const existingComment = comments.data.find(comment =>
+            comment.user.type === 'Bot' &&
+            comment.body.includes('📋 PR Status Summary')
+          );
+
+          if (existingComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existingComment.id,
+              body: body,
+            });
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body,
+            });
+          }
+
+  workflow-status-update:
+    name: Update Workflow Status
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_run'
+
+    steps:
+    - name: Update PR status based on workflow result
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const workflowRun = context.payload.workflow_run;
+          const conclusion = workflowRun.conclusion;
+          const workflowName = workflowRun.name;
+
+          // Get associated PRs
+          const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            commit_sha: workflowRun.head_sha,
+          });
+
+          for (const pr of prs.data) {
+            const statusEmoji = conclusion === 'success' ? '✅' :
+                               conclusion === 'failure' ? '❌' :
+                               conclusion === 'cancelled' ? '⚪' : '🟡';
+
+            const statusText = conclusion === 'success' ? 'Passed' :
+                              conclusion === 'failure' ? 'Failed' :
+                              conclusion === 'cancelled' ? 'Cancelled' : 'In Progress';
+
+            // Get existing comments
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+            });
+
+            // Find status comment to update
+            const statusComment = comments.data.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('📋 PR Status Summary')
+            );
+
+            if (statusComment) {
+              let updatedBody = statusComment.body;
+
+              // Update the test status section
+              const testStatusRegex = /### 🧪 Test Status\n.*?\n\n/s;
+              const newTestStatus = `### 🧪 Test Status
+          - **${workflowName}**: ${statusEmoji} ${statusText}
+
+          `;
+
+              if (testStatusRegex.test(updatedBody)) {
+                updatedBody = updatedBody.replace(testStatusRegex, newTestStatus);
+              } else {
+                // Insert test status after checks section
+                updatedBody = updatedBody.replace(
+                  '### 📝 Review Guidelines',
+                  newTestStatus + '### 📝 Review Guidelines'
+                );
+              }
+
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: statusComment.id,
+                body: updatedBody,
+              });
+            }
+          }

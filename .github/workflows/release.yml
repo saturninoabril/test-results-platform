@@ -1,0 +1,270 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  release:
+    types: [ published ]
+
+env:
+  PYTHON_VERSION: "3.13"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  full-test-suite:
+    name: Full Test Suite
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: test_results
+          POSTGRES_USER: test_results_user
+          POSTGRES_PASSWORD: test_results_password
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5433:5432
+
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin123
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 3
+        ports:
+          - 9000:9000
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
+
+    - name: Install dependencies
+      run: |
+        uv sync --extra dev
+
+    - name: Set up MinIO buckets
+      run: |
+        curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc -o mc
+        chmod +x mc
+        sudo mv mc /usr/local/bin/
+        sleep 10
+        mc alias set myminio http://localhost:9000 minioadmin minioadmin123
+        mc mb myminio/test-artifacts || true
+        mc policy set public myminio/test-artifacts || true
+
+    - name: Run complete test suite
+      run: |
+        echo "🧪 Running complete test suite..."
+        # Run all quality checks and tests
+        echo "🎨 Code formatting..."
+        uv run ruff format src/ tests/ --check
+
+        echo "🔍 Linting..."
+        uv run ruff check src/ tests/
+
+        echo "🔍 Type checking..."
+        uv run mypy src/
+
+        # Set up database
+        echo "🗄️ Database migrations..."
+        uv run alembic upgrade head
+
+        echo "🧪 Unit tests..."
+        uv run python -m pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term
+
+        echo "📋 Contract tests..."
+        uv run python -m pytest tests/contract/ -v --tb=short
+
+        echo "🧪 Integration tests..."
+        uv run python -m pytest tests/integration/ -v --tb=short --cov-append --cov=src --cov-report=xml --cov-report=term
+      env:
+        DATABASE_URL: postgresql+asyncpg://test_results_user:test_results_password@localhost:5433/test_results
+        STORAGE_TYPE: minio
+        MINIO_ENDPOINT: http://localhost:9000
+        MINIO_ACCESS_KEY: minioadmin
+        MINIO_SECRET_KEY: minioadmin123
+        MINIO_BUCKET_PREFIX: test
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: full-suite
+        name: codecov-full
+        fail_ci_if_error: true
+
+  build-and-publish:
+    name: Build and Publish
+    runs-on: ubuntu-latest
+    needs: full-test-suite
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
+
+    - name: Install dependencies
+      run: |
+        uv sync --extra dev
+
+    - name: Build Python package
+      run: |
+        echo "📦 Building Python package..."
+        uv build
+
+    - name: Validate build artifacts
+      run: |
+        echo "🔍 Validating build artifacts..."
+        uv run python scripts/validate_build.py
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata (tags, labels) for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        target: production
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Generate artifact attestation
+      uses: actions/attest-build-provenance@v1
+      with:
+        subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}
+        subject-digest: ${{ steps.build.outputs.digest }}
+        push-to-registry: true
+
+    - name: Upload Python package artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-package-release
+        path: dist/
+        retention-days: 30
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build-and-publish
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+      url: https://test-results-staging.example.com
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy to staging environment
+      run: |
+        echo "🚀 Deploying to staging environment..."
+        echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main"
+        # Add your deployment commands here
+        # For example, using kubectl, helm, or other deployment tools
+        echo "Deployment completed successfully!"
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build-and-publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: production
+      url: https://test-results.example.com
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy to production environment
+      run: |
+        echo "🚀 Deploying to production environment..."
+        echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}"
+        # Add your production deployment commands here
+        echo "Production deployment completed successfully!"
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build-and-publish
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'

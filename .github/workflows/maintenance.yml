@@ -1,0 +1,88 @@
+name: Repository Maintenance
+
+on:
+  schedule:
+    # Run daily at 2:00 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale-issues-and-prs:
+    name: Mark Stale Issues and PRs
+    runs-on: ubuntu-latest
+    # Only run on trusted repository, not forks
+    if: github.repository_owner == 'saturninoabril'
+
+    steps:
+    - name: Mark stale issues and PRs
+      uses: actions/stale@v9
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+        # Issues
+        stale-issue-message: |
+          This issue has been automatically marked as stale because it has not had recent activity.
+          It will be closed if no further activity occurs within the next 7 days.
+
+          If this issue is still relevant, please add a comment to keep it open.
+
+          Thank you for your contributions! 🚀
+
+        close-issue-message: |
+          This issue was automatically closed due to inactivity.
+
+          If you believe this issue is still relevant, please feel free to reopen it or create a new issue with updated information.
+
+        # Pull Requests
+        stale-pr-message: |
+          This pull request has been automatically marked as stale because it has not had recent activity.
+          It will be closed if no further activity occurs within the next 7 days.
+
+          If this PR is still needed, please:
+          - Rebase against the latest main branch
+          - Resolve any merge conflicts
+          - Add a comment explaining the current status
+
+          Thank you for your contribution! 🚀
+
+        close-pr-message: |
+          This pull request was automatically closed due to inactivity.
+
+          If you would like to continue working on this change, please feel free to reopen this PR or create a new one.
+          Please make sure to rebase against the latest main branch.
+
+        # Timing configuration
+        days-before-stale: 30
+        days-before-close: 7
+
+        # Labels
+        stale-issue-label: 'stale'
+        stale-pr-label: 'stale'
+
+        # Exemptions
+        exempt-issue-labels: 'pinned,security,help-wanted,good-first-issue'
+        exempt-pr-labels: 'pinned,security,work-in-progress'
+        exempt-draft-pr: true
+
+        # Only process a limited number per run to avoid rate limits
+        operations-per-run: 50
+
+  cleanup-workflow-runs:
+    name: Cleanup Old Workflow Runs
+    runs-on: ubuntu-latest
+    # Only run on trusted repository, not forks
+    if: github.repository_owner == 'saturninoabril'
+
+    steps:
+    - name: Delete old workflow runs
+      uses: Mattraks/delete-workflow-runs@v2
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repository: ${{ github.repository }}
+        retain_days: 30
+        keep_minimum_runs: 10

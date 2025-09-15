@@ -1,0 +1,248 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main ]
+  pull_request_target:
+    branches: [ main, release/* ]
+  schedule:
+    # Run weekly quality report on Sundays at 6:00 AM UTC
+    - cron: '0 6 * * 0'
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  code-metrics:
+    name: Code Quality Metrics
+    runs-on: ubuntu-latest
+    # For pull requests from forks, only run on trusted repository
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Need full history for some metrics
+        ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
+
+    - name: Install dependencies
+      run: |
+        uv sync --extra dev
+
+    - name: Install additional quality tools
+      run: |
+        uv add --dev bandit[toml] safety vulture radon
+
+    - name: Run code complexity analysis
+      id: complexity
+      run: |
+        echo "🔍 Analyzing code complexity..."
+
+        # Cyclomatic complexity
+        echo "## Cyclomatic Complexity" > code_metrics.md
+        echo '```' >> code_metrics.md
+        uv run radon cc src/ --total-average >> code_metrics.md
+        echo '```' >> code_metrics.md
+        echo "" >> code_metrics.md
+
+        # Maintainability index
+        echo "## Maintainability Index" >> code_metrics.md
+        echo '```' >> code_metrics.md
+        uv run radon mi src/ >> code_metrics.md
+        echo '```' >> code_metrics.md
+        echo "" >> code_metrics.md
+
+        # Raw metrics
+        echo "## Raw Metrics" >> code_metrics.md
+        echo '```' >> code_metrics.md
+        uv run radon raw src/ --summary >> code_metrics.md
+        echo '```' >> code_metrics.md
+
+    - name: Run security analysis
+      id: security
+      continue-on-error: true
+      run: |
+        echo "🔒 Running security analysis..."
+
+        # Bandit security linter
+        echo "## Security Analysis (Bandit)" >> security_report.md
+        echo '```' >> security_report.md
+        uv run bandit -r src/ -f txt >> security_report.md || true
+        echo '```' >> security_report.md
+        echo "" >> security_report.md
+
+        # Safety check for known vulnerabilities
+        echo "## Vulnerability Check (Safety)" >> security_report.md
+        echo '```' >> security_report.md
+        uv run safety check --json >> safety_output.json || true
+        if [ -s safety_output.json ]; then
+          echo "Potential vulnerabilities found:" >> security_report.md
+          cat safety_output.json >> security_report.md
+        else
+          echo "No known vulnerabilities found in dependencies." >> security_report.md
+        fi
+        echo '```' >> security_report.md
+
+    - name: Run dead code analysis
+      id: deadcode
+      continue-on-error: true
+      run: |
+        echo "🧹 Analyzing dead code..."
+
+        echo "## Dead Code Analysis (Vulture)" >> deadcode_report.md
+        echo '```' >> deadcode_report.md
+        uv run vulture src/ --min-confidence 80 >> deadcode_report.md || true
+        echo '```' >> deadcode_report.md
+
+    - name: Calculate test coverage
+      id: coverage
+      run: |
+        echo "📊 Calculating test coverage..."
+
+        # Run tests with coverage
+        uv run python -m pytest tests/unit/ --cov=src --cov-report=xml --cov-report=term --cov-report=html
+
+        # Extract coverage percentage
+        COVERAGE=$(uv run python -c "
+        import xml.etree.ElementTree as ET
+        tree = ET.parse('coverage.xml')
+        root = tree.getroot()
+        coverage = root.attrib['line-rate']
+        print(f'{float(coverage) * 100:.1f}')
+        ")
+
+        echo "coverage_percent=$COVERAGE" >> $GITHUB_OUTPUT
+
+    - name: Generate code quality report
+      id: report
+      run: |
+        echo "📋 Generating code quality report..."
+
+        # Create comprehensive report
+        cat << EOF > code_quality_report.md
+        # Code Quality Report
+
+        **Generated**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        **Commit**: ${{ github.sha }}
+        **Branch**: ${{ github.ref_name }}
+
+        ## 📊 Summary
+
+        - **Test Coverage**: ${{ steps.coverage.outputs.coverage_percent }}%
+        - **Python Version**: ${{ env.PYTHON_VERSION }}
+        - **Analysis Date**: $(date -u +"%Y-%m-%d")
+
+        ## 📈 Metrics
+
+        $(cat code_metrics.md)
+
+        ## 🔒 Security
+
+        $(cat security_report.md)
+
+        ## 🧹 Code Health
+
+        $(cat deadcode_report.md)
+
+        ## 📊 Test Coverage Details
+
+        Current test coverage: **${{ steps.coverage.outputs.coverage_percent }}%**
+
+        For detailed coverage report, check the uploaded artifacts.
+
+        ---
+        *Report generated automatically by GitHub Actions*
+        EOF
+
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report-${{ github.run_number }}
+        path: |
+          coverage.xml
+          htmlcov/
+        retention-days: 30
+
+    - name: Upload code quality report
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-quality-report-${{ github.run_number }}
+        path: |
+          code_quality_report.md
+          code_metrics.md
+          security_report.md
+          deadcode_report.md
+        retention-days: 30
+
+    - name: Comment PR with quality metrics
+      if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+
+          try {
+            const report = fs.readFileSync('code_quality_report.md', 'utf8');
+            const coverage = '${{ steps.coverage.outputs.coverage_percent }}';
+
+            const body = `## 📊 Code Quality Report
+
+            **Test Coverage**: ${coverage}%
+
+            <details>
+            <summary>📋 Detailed Quality Metrics</summary>
+
+            ${report}
+
+            </details>
+
+            ### 💡 Quality Guidelines
+            - Maintain test coverage above 80%
+            - Keep cyclomatic complexity low (< 10 per function)
+            - Address any security issues before merging
+            - Remove dead code and unused imports
+
+            ---
+            *Full reports available in workflow artifacts*
+            `;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body,
+            });
+          } catch (error) {
+            console.log('Could not create quality report comment:', error);
+          }
+
+    - name: Check quality gates
+      run: |
+        echo "🚦 Checking quality gates..."
+
+        COVERAGE=${{ steps.coverage.outputs.coverage_percent }}
+        COVERAGE_THRESHOLD=80.0
+
+        echo "Current coverage: ${COVERAGE}%"
+        echo "Required coverage: ${COVERAGE_THRESHOLD}%"
+
+        if (( $(echo "$COVERAGE >= $COVERAGE_THRESHOLD" | bc -l) )); then
+          echo "✅ Coverage check passed"
+        else
+          echo "❌ Coverage check failed: ${COVERAGE}% < ${COVERAGE_THRESHOLD}%"
+          echo "Please add tests to improve coverage"
+          exit 1
+        fi
+
+        echo "🎉 All quality gates passed!"
