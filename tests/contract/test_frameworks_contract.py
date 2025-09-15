@@ -4,61 +4,20 @@ These tests validate API contracts defined in OpenAPI specification.
 Tests must FAIL initially (RED phase) - no implementation exists yet.
 """
 
-from datetime import UTC
 from uuid import UUID, uuid4
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
 # Apply pytest.mark.asyncio to all test methods in this module
 pytestmark = pytest.mark.asyncio
 
 
-async def setup_test_client():
-    """Set up test client with authentication and database."""
-    from datetime import datetime, timedelta
-
-    from src.lib.auth import TokenClaims, TokenScope, TokenType
-    from src.lib.database import init_database
-    from src.lib.middleware import AuthenticatedUser, UserRole, get_current_context
-    from src.main import app
-
-    # Initialize database
-    await init_database()
-
-    # Mock authentication for contract tests
-    def mock_auth():
-        claims = TokenClaims(
-            sub="test:user:123",
-            exp=datetime.now(UTC) + timedelta(hours=1),
-            scope=TokenScope.USER,
-            token_type=TokenType.ACCESS,
-            username="testuser",
-            email="test@example.com",
-            role=UserRole.ADMIN,
-        )
-        return AuthenticatedUser(
-            user_id="test:user:123",
-            username="testuser",
-            email="test@example.com",
-            role=UserRole.ADMIN,
-            permissions=["frameworks:read", "frameworks:write", "frameworks:delete"],
-            token_claims=claims,
-        )
-
-    # Override authentication dependencies
-    app.dependency_overrides[get_current_context] = mock_auth
-
-    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-
-
 class TestFrameworksContract:
     """Contract tests for /api/v1/frameworks endpoints."""
 
-    async def test_create_framework_success(self):
+    async def test_create_framework_success(self, client: AsyncClient):
         """Test POST /api/v1/frameworks with valid data."""
-        client = await setup_test_client()
-
         import random
 
         framework_data = {
@@ -67,18 +26,17 @@ class TestFrameworksContract:
             "metadata": {"actualWorkers": 1, "projects": ["setup", "ipad", "chrome", "firefox"]},
         }
 
-        async with client:
-            response = await client.post("/api/v1/frameworks", json=framework_data)
+        response = await client.post("/api/v1/frameworks", json=framework_data)
 
-            assert response.status_code == 201
-            data = response.json()
-            assert "id" in data
-            assert UUID(data["id"])  # Valid UUID
-            assert data["name"] == "playwright"
-            assert data["version"] == framework_data["version"]
-            assert data["metadata"] == framework_data["metadata"]
-            assert "created_at" in data
-            assert "updated_at" in data
+        assert response.status_code == 201
+        data = response.json()
+        assert "id" in data
+        assert UUID(data["id"])  # Valid UUID
+        assert data["name"] == "playwright"
+        assert data["version"] == framework_data["version"]
+        assert data["metadata"] == framework_data["metadata"]
+        assert "created_at" in data
+        assert "updated_at" in data
 
     async def test_create_framework_invalid_name(self, client: AsyncClient):
         """Test POST /api/v1/frameworks with invalid name."""

@@ -1,6 +1,6 @@
 # Multi-stage build for Test Results API
 # Stage 1: Base dependencies
-FROM python:3.13-slim as base
+FROM python:3.13-slim AS base
 
 # Set environment variables for optimal Python behavior
 ENV PYTHONUNBUFFERED=1 \
@@ -33,11 +33,10 @@ COPY pyproject.toml ./
 COPY uv.lock* ./
 RUN pip install --upgrade pip uv && \
     uv sync --frozen --no-dev && \
-    pip uninstall -y uv && \
-    pip cache purge
+    pip uninstall -y uv
 
 # Stage 2: Development
-FROM base as development
+FROM base AS development
 
 # Install development dependencies
 RUN pip install uv && \
@@ -61,10 +60,10 @@ USER appuser
 EXPOSE 8000
 
 # Development command with auto-reload
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "debug"]
+CMD [".venv/bin/uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "debug"]
 
 # Stage 3: Production builder
-FROM base as builder
+FROM base AS builder
 
 # Copy source code
 COPY src/ ./src/
@@ -77,7 +76,7 @@ RUN find . -type d -name __pycache__ -exec rm -rf {} + || true && \
     find . -type f -name "*.pyc" -delete
 
 # Stage 4: Production
-FROM python:3.13-slim as production
+FROM python:3.13-slim AS production
 
 # Production environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -125,33 +124,13 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Production command with optimizations
-CMD uvicorn src.main:app \
-    --host 0.0.0.0 \
-    --port 8000 \
-    --workers ${WORKERS} \
-    --worker-class uvicorn.workers.UvicornWorker \
-    --max-requests ${MAX_REQUESTS} \
-    --max-requests-jitter ${MAX_REQUESTS_JITTER} \
-    --timeout-keep-alive ${TIMEOUT_KEEP_ALIVE} \
-    --log-level ${LOG_LEVEL} \
-    --access-log \
-    --use-colors
+CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers ${WORKERS} --worker-class uvicorn.workers.UvicornWorker --max-requests ${MAX_REQUESTS} --max-requests-jitter ${MAX_REQUESTS_JITTER} --timeout-keep-alive ${TIMEOUT_KEEP_ALIVE} --log-level ${LOG_LEVEL} --access-log --use-colors"]
 
 # Optional: Production with Gunicorn (alternative)
-FROM production as production-gunicorn
+FROM production AS production-gunicorn
 
 # Install Gunicorn
 RUN pip install --no-cache-dir gunicorn[gthread]
 
 # Gunicorn production command
-CMD gunicorn src.main:app \
-    -w ${WORKERS} \
-    -k uvicorn.workers.UvicornWorker \
-    -b 0.0.0.0:8000 \
-    --max-requests ${MAX_REQUESTS} \
-    --max-requests-jitter ${MAX_REQUESTS_JITTER} \
-    --timeout 30 \
-    --keep-alive ${TIMEOUT_KEEP_ALIVE} \
-    --log-level ${LOG_LEVEL} \
-    --access-logfile - \
-    --error-logfile -
+CMD ["sh", "-c", "gunicorn src.main:app -w ${WORKERS} -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --max-requests ${MAX_REQUESTS} --max-requests-jitter ${MAX_REQUESTS_JITTER} --timeout 30 --keep-alive ${TIMEOUT_KEEP_ALIVE} --log-level ${LOG_LEVEL} --access-logfile - --error-logfile -"]

@@ -299,12 +299,8 @@ test-all: install ## Run complete test suite
 	@$(MAKE) test-integration VERBOSE=$(VERBOSE)
 	@echo -e "$(GREEN)✅ Complete test suite passed$(RESET)"
 
-build: install ## Create production-ready artifacts
+build: install type-check test-all ## Create production-ready artifacts
 	@echo -e "$(BLUE)Creating production-ready artifacts...$(RESET)"
-	@echo -e "$(CYAN)Running pre-build validation$(RESET)"
-	@$(MAKE) type-check lint VERBOSE=0
-	@echo -e "$(CYAN)Running test suite$(RESET)"
-	@$(MAKE) test-unit VERBOSE=0
 	@echo -e "$(CYAN)Building Python package$(RESET)"
 	@uv build
 	@echo -e "$(CYAN)Validating build artifacts$(RESET)"
@@ -340,7 +336,7 @@ build-check: ## Validate build artifacts
 		exit 1; \
 	fi
 	@echo -e "$(CYAN)Validating package metadata$(RESET)"
-	@uv run python -c "import pkg_resources; print('Package validation would go here')"
+	@uv run python scripts/validate_build.py
 	@echo -e "$(GREEN)✅ Build artifacts validated successfully$(RESET)"
 
 docker-build: ## Build development Docker image
@@ -394,14 +390,25 @@ docker-run: ## Run application in container locally
 	@echo -e "$(CYAN)Starting $(DOCKER_IMAGE_DEV) with port 8000 exposed$(RESET)"
 	@echo -e "$(YELLOW)Application will be available at http://localhost:8000$(RESET)"
 	@echo -e "$(YELLOW)Press Ctrl+C to stop the container$(RESET)"
-	@docker run \
-		--rm \
-		--interactive \
-		--tty \
-		--publish 8000:8000 \
-		--env ENV=$(ENV) \
-		--name $(PROJECT_NAME)-dev \
-		$(DOCKER_IMAGE_DEV)
+	@if [ -t 0 ]; then \
+		echo -e "$(CYAN)Running with interactive TTY$(RESET)"; \
+		docker run \
+			--rm \
+			--interactive \
+			--tty \
+			--publish 8000:8000 \
+			--env ENV=$(ENV) \
+			--name $(PROJECT_NAME)-dev \
+			$(DOCKER_IMAGE_DEV); \
+	else \
+		echo -e "$(CYAN)Running without TTY (non-interactive mode)$(RESET)"; \
+		docker run \
+			--rm \
+			--publish 8000:8000 \
+			--env ENV=$(ENV) \
+			--name $(PROJECT_NAME)-dev \
+			$(DOCKER_IMAGE_DEV); \
+	fi
 
 db-upgrade: install ## Apply database migrations
 	@echo -e "$(BLUE)Applying database migrations...$(RESET)"
@@ -433,8 +440,15 @@ db-reset: install ## Reset development database
 	@echo -e "$(RED)⚠️  WARNING: This will destroy all data in development database$(RESET)"
 	@echo -e "$(YELLOW)Press Ctrl+C within 10 seconds to cancel...$(RESET)"
 	@sleep 10
-	@echo -e "$(CYAN)Dropping all tables$(RESET)"
-	@uv run alembic downgrade base
+	@echo -e "$(CYAN)Performing complete database cleanup$(RESET)"
+	@if command -v docker >/dev/null 2>&1 && docker ps | grep -q test-results-postgres; then \
+		echo -e "$(CYAN)Using Docker PostgreSQL container for cleanup$(RESET)"; \
+		docker exec test-results-postgres psql -U test_results_user -d test_results -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || true; \
+		echo -e "$(CYAN)Database schema completely reset$(RESET)"; \
+	else \
+		echo -e "$(YELLOW)Docker PostgreSQL container not found, using Alembic downgrade$(RESET)"; \
+		uv run alembic downgrade base || true; \
+	fi
 	@echo -e "$(CYAN)Recreating database schema$(RESET)"
 	@uv run alembic upgrade head
 	@echo -e "$(GREEN)Development database reset completed$(RESET)"
