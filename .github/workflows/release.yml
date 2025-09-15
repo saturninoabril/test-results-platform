@@ -35,7 +35,7 @@ jobs:
           - 5433:5432
 
       minio:
-        image: minio/minio:latest
+        image: minio/minio:RELEASE.2025-09-07T16-13-09Z
         env:
           MINIO_ROOT_USER: minioadmin
           MINIO_ROOT_PASSWORD: minioadmin123
@@ -43,9 +43,12 @@ jobs:
           --health-cmd "curl -f http://localhost:9000/minio/health/live"
           --health-interval 30s
           --health-timeout 10s
-          --health-retries 3
+          --health-retries 5
+          --entrypoint sh
+          -c "minio server /data --console-address :9001"
         ports:
           - 9000:9000
+          - 9001:9001
 
     steps:
     - name: Checkout code
@@ -57,7 +60,7 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v4
+      uses: astral-sh/setup-uv@v6
       with:
         version: "latest"
 
@@ -138,7 +141,7 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v4
+      uses: astral-sh/setup-uv@v6
       with:
         version: "latest"
 
