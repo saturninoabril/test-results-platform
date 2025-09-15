@@ -11,7 +11,7 @@ import traceback
 import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 from fastapi import Request
@@ -100,7 +100,7 @@ class RequestContextFilter(logging.Filter):
                 record.user_id = request_context.get("user_id")
                 record.endpoint = request_context.get("endpoint")
                 record.method = request_context.get("method")
-        except:
+        except Exception:
             pass
 
         return True
@@ -140,7 +140,7 @@ def get_request_context() -> dict[str, Any]:
 
 
 @contextmanager
-def request_context(request_id: Optional[str] = None, **context: Any) -> Any:
+def request_context(request_id: str | None = None, **context: Any) -> Any:
     """Context manager for request-scoped logging."""
     if not request_id:
         request_id = str(uuid.uuid4())
@@ -282,7 +282,9 @@ def get_logger(name: str) -> Any:  # structlog.BoundLogger
     return structlog.get_logger(name)
 
 
-def log_performance(logger: logging.Logger, operation: str, duration_ms: float, **extra_data: Any) -> None:
+def log_performance(
+    logger: logging.Logger, operation: str, duration_ms: float, **extra_data: Any
+) -> None:
     """Log performance metrics."""
     logger.info(
         f"{operation} completed",
@@ -301,9 +303,9 @@ def log_api_request(
     path: str,
     status_code: int,
     duration_ms: float,
-    user_id: Optional[str] = None,
-    request_size: Optional[int] = None,
-    response_size: Optional[int] = None,
+    user_id: str | None = None,
+    request_size: int | None = None,
+    response_size: int | None = None,
 ) -> None:
     """Log API request details."""
     logger.info(
@@ -326,7 +328,7 @@ def log_database_operation(
     operation: str,
     table: str,
     duration_ms: float,
-    rows_affected: Optional[int] = None,
+    rows_affected: int | None = None,
     **extra_data: Any,
 ) -> None:
     """Log database operation details."""
@@ -348,7 +350,7 @@ def log_storage_operation(
     operation: str,
     object_key: str,
     duration_ms: float,
-    size_bytes: Optional[int] = None,
+    size_bytes: int | None = None,
     **extra_data: Any,
 ) -> None:
     """Log storage operation details."""
@@ -368,8 +370,8 @@ def log_storage_operation(
 def log_authentication_event(
     logger: logging.Logger,
     event_type: str,
-    user_id: Optional[str] = None,
-    token_type: Optional[str] = None,
+    user_id: str | None = None,
+    token_type: str | None = None,
     success: bool = True,
     **extra_data: Any,
 ) -> None:
@@ -390,7 +392,9 @@ def log_authentication_event(
     )
 
 
-def log_error(logger: logging.Logger, error: Exception, context: Optional[str] = None, **extra_data: Any) -> None:
+def log_error(
+    logger: logging.Logger, error: Exception, context: str | None = None, **extra_data: Any
+) -> None:
     """Log error with full context."""
     logger.error(
         f"Error in {context}: {str(error)}" if context else str(error),
@@ -407,7 +411,7 @@ def log_error(logger: logging.Logger, error: Exception, context: Optional[str] =
 class LoggingMiddleware:
     """FastAPI middleware for request logging."""
 
-    def __init__(self, logger: Optional[logging.Logger] = None):
+    def __init__(self, logger: logging.Logger | None = None):
         self.logger = logger or logging.getLogger("api.requests")
 
     async def __call__(self, request: Request, call_next: Any) -> Any:

@@ -44,14 +44,14 @@ async def create_framework(request: FrameworkCreateRequest) -> FrameworkResponse
 
     except FrameworkAlreadyExistsError as e:
         logger.warning("Framework creation conflict", error=str(e))
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Framework creation failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while creating framework",
-        )
+        ) from e
 
 
 @router.get(
@@ -73,7 +73,7 @@ async def get_frameworks() -> list[FrameworkResponse]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving frameworks",
-        )
+        ) from e
 
 
 @router.get(
@@ -92,14 +92,14 @@ async def get_framework(framework_id: UUID) -> FrameworkResponse:
 
     except FrameworkNotFoundError as e:
         logger.warning("Framework not found via API", framework_id=str(framework_id))
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Framework retrieval failed", framework_id=str(framework_id), error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving framework",
-        )
+        ) from e
 
 
 @router.put(
@@ -125,18 +125,18 @@ async def update_framework(
 
     except FrameworkNotFoundError as e:
         logger.warning("Framework not found for update via API", framework_id=str(framework_id))
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except FrameworkAlreadyExistsError as e:
         logger.warning("Framework update conflict", framework_id=str(framework_id), error=str(e))
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Framework update failed", framework_id=str(framework_id), error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while updating framework",
-        )
+        ) from e
 
 
 @router.delete(
@@ -155,11 +155,11 @@ async def delete_framework(framework_id: UUID) -> Response:
 
     except FrameworkNotFoundError as e:
         logger.warning("Framework not found for deletion via API", framework_id=str(framework_id))
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Framework deletion failed", framework_id=str(framework_id), error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while deleting framework",
-        )
+        ) from e

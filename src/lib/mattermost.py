@@ -3,14 +3,13 @@ Mattermost webhook integration for sending notifications about test results.
 Supports various notification types including test failures, suite completion, and alerts.
 """
 
-import json
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import httpx
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from .config import MattermostSettings
 
@@ -19,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class NotificationType(str, Enum):
     """Types of notifications that can be sent."""
+
     TEST_FAILURE = "test_failure"
     SUITE_COMPLETION = "suite_completion"
     HIGH_FAILURE_RATE = "high_failure_rate"
@@ -28,30 +28,32 @@ class NotificationType(str, Enum):
 
 class MattermostAttachment(BaseModel):
     """Mattermost message attachment model."""
-    color: Optional[str] = None
-    pretext: Optional[str] = None
-    text: Optional[str] = None
-    title: Optional[str] = None
-    title_link: Optional[str] = None
-    author_name: Optional[str] = None
-    author_link: Optional[str] = None
-    author_icon: Optional[str] = None
-    fields: Optional[List[Dict[str, Union[str, bool]]]] = None
-    footer: Optional[str] = None
-    footer_icon: Optional[str] = None
-    timestamp: Optional[str] = None
-    thumb_url: Optional[str] = None
-    image_url: Optional[str] = None
+
+    color: str | None = None
+    pretext: str | None = None
+    text: str | None = None
+    title: str | None = None
+    title_link: str | None = None
+    author_name: str | None = None
+    author_link: str | None = None
+    author_icon: str | None = None
+    fields: list[dict[str, str | bool]] | None = None
+    footer: str | None = None
+    footer_icon: str | None = None
+    timestamp: str | None = None
+    thumb_url: str | None = None
+    image_url: str | None = None
 
 
 class MattermostMessage(BaseModel):
     """Mattermost webhook message model."""
-    text: Optional[str] = None
-    username: Optional[str] = None
-    icon_url: Optional[str] = None
-    icon_emoji: Optional[str] = None
-    channel: Optional[str] = None
-    attachments: Optional[List[MattermostAttachment]] = None
+
+    text: str | None = None
+    username: str | None = None
+    icon_url: str | None = None
+    icon_emoji: str | None = None
+    channel: str | None = None
+    attachments: list[MattermostAttachment] | None = None
 
 
 class MattermostClient:
@@ -67,11 +69,7 @@ class MattermostClient:
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         await self.client.aclose()
 
-    async def send_message(
-        self,
-        message: MattermostMessage,
-        channel: Optional[str] = None
-    ) -> bool:
+    async def send_message(self, message: MattermostMessage, channel: str | None = None) -> bool:
         """
         Send a message to Mattermost.
 
@@ -106,14 +104,18 @@ class MattermostClient:
             response = await self.client.post(
                 self.settings.webhook_url,
                 json=payload,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
             )
 
             if response.status_code == 200:
-                logger.info(f"Successfully sent Mattermost notification to {message.channel or 'default channel'}")
+                logger.info(
+                    f"Successfully sent Mattermost notification to {message.channel or 'default channel'}"
+                )
                 return True
             else:
-                logger.error(f"Failed to send Mattermost notification: {response.status_code} - {response.text}")
+                logger.error(
+                    f"Failed to send Mattermost notification: {response.status_code} - {response.text}"
+                )
                 return False
 
         except Exception as e:
@@ -123,11 +125,11 @@ class MattermostClient:
     def _get_color_for_type(self, notification_type: NotificationType) -> str:
         """Get color for notification type."""
         color_map = {
-            NotificationType.TEST_FAILURE: "#FF4444",      # Red
+            NotificationType.TEST_FAILURE: "#FF4444",  # Red
             NotificationType.SUITE_COMPLETION: "#00DD00",  # Green
-            NotificationType.HIGH_FAILURE_RATE: "#FF8800", # Orange
-            NotificationType.SYSTEM_ALERT: "#FF0000",      # Dark Red
-            NotificationType.PERFORMANCE_ALERT: "#FFAA00", # Yellow-Orange
+            NotificationType.HIGH_FAILURE_RATE: "#FF8800",  # Orange
+            NotificationType.SYSTEM_ALERT: "#FF0000",  # Dark Red
+            NotificationType.PERFORMANCE_ALERT: "#FFAA00",  # Yellow-Orange
         }
         return color_map.get(notification_type, "#0066CC")  # Default blue
 
@@ -148,10 +150,10 @@ class MattermostClient:
         suite_name: str,
         framework: str,
         environment: str,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
         retry_count: int = 0,
-        duration_ms: Optional[int] = None,
-        channel: Optional[str] = None
+        duration_ms: int | None = None,
+        channel: str | None = None,
     ) -> bool:
         """
         Send notification for test failure.
@@ -172,7 +174,7 @@ class MattermostClient:
         if not self.settings.notify_test_failures:
             return False
 
-        fields: List[Dict[str, Union[str, bool]]] = [
+        fields: list[dict[str, str | bool]] = [
             {"title": "Suite", "value": suite_name, "short": True},
             {"title": "Framework", "value": framework, "short": True},
             {"title": "Environment", "value": environment, "short": True},
@@ -182,20 +184,21 @@ class MattermostClient:
             fields.append({"title": "Retries", "value": str(retry_count), "short": True})
 
         if duration_ms is not None:
-            fields.append({"title": "Duration", "value": self._format_duration(duration_ms), "short": True})
+            fields.append(
+                {"title": "Duration", "value": self._format_duration(duration_ms), "short": True}
+            )
 
         attachment = MattermostAttachment(
             color=self._get_color_for_type(NotificationType.TEST_FAILURE),
             title=f"❌ Test Failed: {test_name}",
-            text=error_message[:500] + "..." if error_message and len(error_message) > 500 else error_message,
+            text=error_message[:500] + "..."
+            if error_message and len(error_message) > 500
+            else error_message,
             fields=fields,
-            timestamp=datetime.utcnow().isoformat() + "Z"
+            timestamp=datetime.utcnow().isoformat() + "Z",
         )
 
-        message = MattermostMessage(
-            text="Test failure detected",
-            attachments=[attachment]
-        )
+        message = MattermostMessage(text="Test failure detected", attachments=[attachment])
 
         return await self.send_message(message, channel)
 
@@ -210,7 +213,7 @@ class MattermostClient:
         skipped_tests: int,
         duration_ms: int,
         started_at: datetime,
-        channel: Optional[str] = None
+        channel: str | None = None,
     ) -> bool:
         """
         Send notification for suite completion.
@@ -245,7 +248,7 @@ class MattermostClient:
 
         failure_rate = failed_tests / total_tests if total_tests > 0 else 0
 
-        fields: List[Dict[str, Union[str, bool]]] = [
+        fields: list[dict[str, str | bool]] = [
             {"title": "Framework", "value": framework, "short": True},
             {"title": "Environment", "value": environment, "short": True},
             {"title": "Total Tests", "value": str(total_tests), "short": True},
@@ -260,12 +263,11 @@ class MattermostClient:
             color=color,
             title=f"{emoji} Suite {status}: {suite_name}",
             fields=fields,
-            timestamp=started_at.isoformat() + "Z"
+            timestamp=started_at.isoformat() + "Z",
         )
 
         message = MattermostMessage(
-            text=f"Test suite completed with {status.lower()} status",
-            attachments=[attachment]
+            text=f"Test suite completed with {status.lower()} status", attachments=[attachment]
         )
 
         return await self.send_message(message, channel)
@@ -278,8 +280,8 @@ class MattermostClient:
         failure_rate: float,
         failed_tests: int,
         total_tests: int,
-        recent_failures: Optional[List[str]] = None,
-        channel: Optional[str] = None
+        recent_failures: list[str] | None = None,
+        channel: str | None = None,
     ) -> bool:
         """
         Send notification for high failure rate.
@@ -297,10 +299,13 @@ class MattermostClient:
         Returns:
             True if notification was sent successfully
         """
-        if not self.settings.notify_high_failure_rate or failure_rate < self.settings.failure_rate_threshold:
+        if (
+            not self.settings.notify_high_failure_rate
+            or failure_rate < self.settings.failure_rate_threshold
+        ):
             return False
 
-        fields: List[Dict[str, Union[str, bool]]] = [
+        fields: list[dict[str, str | bool]] = [
             {"title": "Framework", "value": framework, "short": True},
             {"title": "Environment", "value": environment, "short": True},
             {"title": "Failure Rate", "value": f"{failure_rate:.1%}", "short": True},
@@ -319,13 +324,10 @@ class MattermostClient:
             title=f"⚠️ High Failure Rate: {suite_name}",
             text=text,
             fields=fields,
-            timestamp=datetime.utcnow().isoformat() + "Z"
+            timestamp=datetime.utcnow().isoformat() + "Z",
         )
 
-        message = MattermostMessage(
-            text="High failure rate alert",
-            attachments=[attachment]
-        )
+        message = MattermostMessage(text="High failure rate alert", attachments=[attachment])
 
         return await self.send_message(message, channel)
 
@@ -334,8 +336,8 @@ class MattermostClient:
         title: str,
         message: str,
         severity: str = "warning",
-        details: Optional[Dict[str, Any]] = None,
-        channel: Optional[str] = None
+        details: dict[str, Any] | None = None,
+        channel: str | None = None,
     ) -> bool:
         """
         Send system alert notification.
@@ -351,9 +353,9 @@ class MattermostClient:
             True if notification was sent successfully
         """
         severity_colors = {
-            "info": "#0066CC",      # Blue
-            "warning": "#FF8800",   # Orange
-            "error": "#FF4444",     # Red
+            "info": "#0066CC",  # Blue
+            "warning": "#FF8800",  # Orange
+            "error": "#FF4444",  # Red
             "critical": "#AA0000",  # Dark Red
         }
 
@@ -364,14 +366,12 @@ class MattermostClient:
             "critical": "🚨",
         }
 
-        fields: List[Dict[str, Union[str, bool]]] = []
+        fields: list[dict[str, str | bool]] = []
         if details:
             for key, value in details.items():
-                fields.append({
-                    "title": key.replace("_", " ").title(),
-                    "value": str(value),
-                    "short": True
-                })
+                fields.append(
+                    {"title": key.replace("_", " ").title(), "value": str(value), "short": True}
+                )
 
         emoji = severity_emojis.get(severity, "ℹ️")
         color = severity_colors.get(severity, "#0066CC")
@@ -381,12 +381,11 @@ class MattermostClient:
             title=f"{emoji} {title}",
             text=message,
             fields=fields if fields else None,
-            timestamp=datetime.utcnow().isoformat() + "Z"
+            timestamp=datetime.utcnow().isoformat() + "Z",
         )
 
         mattermost_message = MattermostMessage(
-            text=f"System alert: {severity}",
-            attachments=[attachment]
+            text=f"System alert: {severity}", attachments=[attachment]
         )
 
         return await self.send_message(mattermost_message, channel)
@@ -394,11 +393,11 @@ class MattermostClient:
     async def notify_performance_alert(
         self,
         metric_name: str,
-        current_value: Union[int, float],
-        threshold_value: Union[int, float],
+        current_value: int | float,
+        threshold_value: int | float,
         unit: str = "",
-        context: Optional[str] = None,
-        channel: Optional[str] = None
+        context: str | None = None,
+        channel: str | None = None,
     ) -> bool:
         """
         Send performance alert notification.
@@ -414,7 +413,7 @@ class MattermostClient:
         Returns:
             True if notification was sent successfully
         """
-        fields: List[Dict[str, Union[str, bool]]] = [
+        fields: list[dict[str, str | bool]] = [
             {"title": "Metric", "value": metric_name, "short": True},
             {"title": "Current Value", "value": f"{current_value}{unit}", "short": True},
             {"title": "Threshold", "value": f"{threshold_value}{unit}", "short": True},
@@ -428,13 +427,10 @@ class MattermostClient:
             title=f"📊 Performance Alert: {metric_name}",
             text=f"Performance threshold exceeded for {metric_name}",
             fields=fields,
-            timestamp=datetime.utcnow().isoformat() + "Z"
+            timestamp=datetime.utcnow().isoformat() + "Z",
         )
 
-        message = MattermostMessage(
-            text="Performance alert triggered",
-            attachments=[attachment]
-        )
+        message = MattermostMessage(text="Performance alert triggered", attachments=[attachment])
 
         return await self.send_message(message, channel)
 

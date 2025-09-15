@@ -91,7 +91,7 @@ class TestUnitTarget:
 
         start_time = time.time()
 
-        result = subprocess.run(
+        subprocess.run(
             ["make", "test-unit"],
             capture_output=True,
             text=True,

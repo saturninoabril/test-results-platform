@@ -97,7 +97,7 @@ class EnvironmentService:
                 logger.error("Environment creation failed", error=str(e))
                 raise EnvironmentAlreadyExistsError(
                     f"Environment '{request.name}' with browser '{request.browser}' and OS '{request.os}' already exists"
-                )
+                ) from e
 
     @staticmethod
     async def get_environments() -> list[EnvironmentResponse]:
@@ -194,7 +194,7 @@ class EnvironmentService:
                 logger.error("Environment update failed", error=str(e))
                 raise EnvironmentAlreadyExistsError(
                     f"Environment '{request.name}' with browser '{request.browser}' and OS '{request.os}' already exists"
-                )
+                ) from e
 
     @staticmethod
     async def delete_environment(environment_id: UUID) -> None:

@@ -3,16 +3,17 @@ Metrics collection and monitoring for production observability.
 """
 
 import asyncio
+import builtins
 import logging
 import os
 import sys
 import threading
 import time
 from collections import defaultdict, deque
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Deque, Optional
+from typing import Any
 
 import psutil  # type: ignore[import-untyped]
 from fastapi import Request
@@ -43,7 +44,7 @@ class MetricsCollector:
 
     def __init__(self, registry: CollectorRegistry = None):
         self.registry = registry or CollectorRegistry()
-        self.custom_metrics: dict[str, Deque[Any]] = defaultdict(lambda: deque(maxlen=1000))
+        self.custom_metrics: dict[str, deque[Any]] = defaultdict(lambda: deque(maxlen=1000))
         self._lock = threading.Lock()
 
         # Initialize Prometheus metrics
@@ -246,8 +247,8 @@ class MetricsCollector:
         endpoint: str,
         status_code: int,
         duration: float,
-        request_size: Optional[int] = None,
-        response_size: Optional[int] = None,
+        request_size: int | None = None,
+        response_size: int | None = None,
     ) -> None:
         """Record API request metrics."""
 
@@ -284,7 +285,11 @@ class MetricsCollector:
 
     # Storage Metrics Methods
     def record_storage_operation(
-        self, operation: str, duration: float, bytes_transferred: Optional[int] = None, success: bool = True
+        self,
+        operation: str,
+        duration: float,
+        bytes_transferred: int | None = None,
+        success: bool = True,
     ) -> None:
         """Record storage operation metrics."""
 
@@ -325,7 +330,9 @@ class MetricsCollector:
         self.test_suites_active.set(count)
 
     # Custom Metrics Methods
-    def record_custom_metric(self, name: str, value: float, labels: Optional[dict[str, str]] = None) -> None:
+    def record_custom_metric(
+        self, name: str, value: float, labels: dict[str, str] | None = None
+    ) -> None:
         """Record custom metric value."""
 
         with self._lock:
@@ -355,7 +362,7 @@ class MetricsCollector:
                 "cpu_usage_percent": self.app_cpu_usage._value._value,
                 "custom_metrics_count": len(self.custom_metrics),
             }
-        except:
+        except Exception:
             # Fallback if metrics not available
             summary = {
                 "status": "metrics_collection_active",
@@ -382,7 +389,7 @@ class MetricsMiddleware:
             try:
                 body = await request.body()
                 request_size = len(body) if body else 0
-            except:
+            except Exception:
                 pass
 
         try:
@@ -395,10 +402,8 @@ class MetricsMiddleware:
 
             # Get response size if available
             if hasattr(response, "body"):
-                try:
+                with suppress(builtins.BaseException):
                     response_size = len(response.body)
-                except:
-                    pass
 
             # Record metrics
             self.collector.record_api_request(

@@ -3,15 +3,14 @@ FastAPI authentication middleware and dependencies for JWT token validation.
 Provides bearer token authentication, user context, and permission-based access control.
 """
 
-from typing import Annotated, Any, List, Optional, Union
-from uuid import UUID
+from typing import Annotated, Any
 
 import structlog
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from .auth import TokenClaims, TokenScope, TokenValidationResult, UserRole, get_token_manager
+from .auth import TokenClaims, TokenScope, UserRole, get_token_manager
 from .github_oauth import get_github_oauth_client
 
 logger = structlog.get_logger()
@@ -22,24 +21,26 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 class AuthenticatedUser(BaseModel):
     """Authenticated user context."""
+
     user_id: str
     username: str
     email: str
     role: UserRole
-    github_id: Optional[int] = None
-    permissions: List[str]
+    github_id: int | None = None
+    permissions: list[str]
     token_claims: TokenClaims
 
 
 class AuthenticatedAutomation(BaseModel):
     """Authenticated automation context."""
+
     automation_id: str
     automation_name: str
-    permissions: List[str]
+    permissions: list[str]
     token_claims: TokenClaims
 
 
-AuthenticatedContext = Union[AuthenticatedUser, AuthenticatedAutomation]
+AuthenticatedContext = AuthenticatedUser | AuthenticatedAutomation
 
 
 class AuthenticationError(HTTPException):
@@ -52,18 +53,15 @@ class AuthenticationError(HTTPException):
 class PermissionError(HTTPException):
     """Permission error for insufficient access rights."""
 
-    def __init__(self, detail: str, required_permissions: List[str]):
+    def __init__(self, detail: str, required_permissions: list[str]):
         super().__init__(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "message": detail,
-                "required_permissions": required_permissions
-            }
+            detail={"message": detail, "required_permissions": required_permissions},
         )
 
 
 async def get_bearer_token(
-    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(bearer_scheme)]
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
 ) -> str:
     """Extract and validate bearer token from Authorization header."""
     if not credentials:
@@ -103,7 +101,7 @@ async def validate_token(token: Annotated[str, Depends(get_bearer_token)]) -> To
 
 
 async def get_current_user(
-    claims: Annotated[TokenClaims, Depends(validate_token)]
+    claims: Annotated[TokenClaims, Depends(validate_token)],
 ) -> AuthenticatedUser:
     """Get current authenticated user from token claims."""
     if claims.scope != TokenScope.USER:
@@ -111,7 +109,12 @@ async def get_current_user(
         raise AuthenticationError("Invalid token scope for user authentication")
 
     if not claims.username or not claims.email or not claims.role:
-        logger.warning("Missing required user claims", username=claims.username, email=claims.email, role=claims.role)
+        logger.warning(
+            "Missing required user claims",
+            username=claims.username,
+            email=claims.email,
+            role=claims.role,
+        )
         raise AuthenticationError("Invalid token: missing required user information")
 
     # Get user permissions from GitHub OAuth client
@@ -125,7 +128,7 @@ async def get_current_user(
         role=claims.role,
         github_id=claims.github_id,
         permissions=permissions,
-        token_claims=claims
+        token_claims=claims,
     )
 
     logger.info(
@@ -133,18 +136,20 @@ async def get_current_user(
         user_id=user.user_id,
         username=user.username,
         role=user.role.value,
-        permissions_count=len(user.permissions)
+        permissions_count=len(user.permissions),
     )
 
     return user
 
 
 async def get_current_automation(
-    claims: Annotated[TokenClaims, Depends(validate_token)]
+    claims: Annotated[TokenClaims, Depends(validate_token)],
 ) -> AuthenticatedAutomation:
     """Get current authenticated automation from token claims."""
     if claims.scope != TokenScope.AUTOMATION:
-        logger.warning("Invalid token scope for automation authentication", scope=claims.scope.value)
+        logger.warning(
+            "Invalid token scope for automation authentication", scope=claims.scope.value
+        )
         raise AuthenticationError("Invalid token scope for automation authentication")
 
     if not claims.automation_name:
@@ -155,21 +160,21 @@ async def get_current_automation(
         automation_id=claims.sub,
         automation_name=claims.automation_name,
         permissions=claims.permissions,
-        token_claims=claims
+        token_claims=claims,
     )
 
     logger.info(
         "Automation authenticated",
         automation_id=automation.automation_id,
         automation_name=automation.automation_name,
-        permissions_count=len(automation.permissions)
+        permissions_count=len(automation.permissions),
     )
 
     return automation
 
 
 async def get_current_context(
-    claims: Annotated[TokenClaims, Depends(validate_token)]
+    claims: Annotated[TokenClaims, Depends(validate_token)],
 ) -> AuthenticatedContext:
     """Get current authenticated context (user or automation)."""
     if claims.scope == TokenScope.USER:
@@ -185,7 +190,7 @@ def require_permissions(*required_permissions: str) -> Any:
     """Dependency factory for permission-based access control."""
 
     async def check_permissions(
-        context: Annotated[AuthenticatedContext, Depends(get_current_context)]
+        context: Annotated[AuthenticatedContext, Depends(get_current_context)],
     ) -> AuthenticatedContext:
         """Check if authenticated context has required permissions."""
         missing_permissions = []
@@ -197,14 +202,15 @@ def require_permissions(*required_permissions: str) -> Any:
         if missing_permissions:
             logger.warning(
                 "Permission denied",
-                user_id=getattr(context, 'user_id', None) or getattr(context, 'automation_id', None),
+                user_id=getattr(context, "user_id", None)
+                or getattr(context, "automation_id", None),
                 required_permissions=list(required_permissions),
                 missing_permissions=missing_permissions,
-                user_permissions=context.permissions
+                user_permissions=context.permissions,
             )
             raise PermissionError(
                 detail=f"Insufficient permissions. Missing: {', '.join(missing_permissions)}",
-                required_permissions=list(required_permissions)
+                required_permissions=list(required_permissions),
             )
 
         return context
@@ -216,7 +222,7 @@ def require_role(*required_roles: UserRole) -> Any:
     """Dependency factory for role-based access control (user tokens only)."""
 
     async def check_role(
-        user: Annotated[AuthenticatedUser, Depends(get_current_user)]
+        user: Annotated[AuthenticatedUser, Depends(get_current_user)],
     ) -> AuthenticatedUser:
         """Check if authenticated user has required role."""
         if user.role not in required_roles:
@@ -225,11 +231,11 @@ def require_role(*required_roles: UserRole) -> Any:
                 user_id=user.user_id,
                 username=user.username,
                 user_role=user.role.value,
-                required_roles=[role.value for role in required_roles]
+                required_roles=[role.value for role in required_roles],
             )
             raise PermissionError(
                 detail=f"Insufficient role. Required: {', '.join(role.value for role in required_roles)}",
-                required_permissions=[]
+                required_permissions=[],
             )
 
         return user
@@ -295,7 +301,7 @@ async def add_auth_context_to_request(request: Request) -> None:
                     role=claims.role or UserRole.USER,
                     github_id=claims.github_id,
                     permissions=permissions,
-                    token_claims=claims
+                    token_claims=claims,
                 )
 
             elif claims.scope == TokenScope.AUTOMATION:
@@ -304,7 +310,7 @@ async def add_auth_context_to_request(request: Request) -> None:
                     automation_id=claims.sub,
                     automation_name=claims.automation_name or "",
                     permissions=claims.permissions,
-                    token_claims=claims
+                    token_claims=claims,
                 )
 
     except Exception as e:

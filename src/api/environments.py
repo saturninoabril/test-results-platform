@@ -49,14 +49,14 @@ async def create_environment(request: EnvironmentCreateRequest) -> EnvironmentRe
 
     except EnvironmentAlreadyExistsError as e:
         logger.warning("Environment creation conflict", error=str(e))
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Environment creation failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while creating environment",
-        )
+        ) from e
 
 
 @router.get(
@@ -95,7 +95,7 @@ async def get_environments(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving environments",
-        )
+        ) from e
 
 
 @router.get(
@@ -114,7 +114,7 @@ async def get_environment(environment_id: UUID) -> EnvironmentResponse:
 
     except EnvironmentNotFoundError as e:
         logger.warning("Environment not found via API", environment_id=str(environment_id))
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except Exception as e:
         logger.error(
@@ -123,7 +123,7 @@ async def get_environment(environment_id: UUID) -> EnvironmentResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving environment",
-        )
+        ) from e
 
 
 @router.put(
@@ -152,20 +152,20 @@ async def update_environment(
         logger.warning(
             "Environment not found for update via API", environment_id=str(environment_id)
         )
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except EnvironmentAlreadyExistsError as e:
         logger.warning(
             "Environment update conflict", environment_id=str(environment_id), error=str(e)
         )
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Environment update failed", environment_id=str(environment_id), error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while updating environment",
-        )
+        ) from e
 
 
 @router.delete(
@@ -186,7 +186,7 @@ async def delete_environment(environment_id: UUID) -> Response:
         logger.warning(
             "Environment not found for deletion via API", environment_id=str(environment_id)
         )
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except Exception as e:
         logger.error(
@@ -195,4 +195,4 @@ async def delete_environment(environment_id: UUID) -> Response:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while deleting environment",
-        )
+        ) from e

@@ -35,7 +35,7 @@ async def get_artifacts() -> list[ArtifactResponse]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving artifacts",
-        )
+        ) from e
 
 
 @router.get(
@@ -62,4 +62,4 @@ async def get_artifact(artifact_id: UUID) -> ArtifactResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving artifact",
-        )
+        ) from e

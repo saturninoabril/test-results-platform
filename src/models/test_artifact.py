@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .test_result import TestResult
@@ -122,11 +122,11 @@ class TestArtifact(BaseModel):
     )
 
     # Relationships
-    test_result: Mapped[Optional["TestResult"]] = relationship(
+    test_result: Mapped[TestResult | None] = relationship(
         "TestResult", back_populates="test_artifacts", lazy="select"
     )
 
-    test_suite: Mapped[Optional["TestSuite"]] = relationship("TestSuite", lazy="select")
+    test_suite: Mapped[TestSuite | None] = relationship("TestSuite", lazy="select")
 
     # Constraints and indexes
     __table_args__ = (
@@ -237,7 +237,7 @@ class TestArtifact(BaseModel):
         try:
             int(checksum, 16)
         except ValueError:
-            raise ValueError("Checksum must be valid hexadecimal")
+            raise ValueError("Checksum must be valid hexadecimal") from None
 
         return checksum
 

@@ -6,7 +6,6 @@ Provides commands for managing automation tokens, users, and GitHub OAuth setup.
 
 import asyncio
 import json
-import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -21,7 +20,6 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 # Import from the parent services
-
 from ..lib.auth import TokenClaims, TokenScope, TokenType, get_token_manager
 from ..lib.config import get_settings
 
@@ -41,7 +39,7 @@ class TokenManager:
         scope: TokenScope,
         expires_days: int = 365,
         permissions: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
+        _metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Generate a new automation token."""
 
@@ -244,7 +242,9 @@ def token() -> None:
     help="Output format",
 )
 @click.option("--save", is_flag=True, help="Save token metadata locally")
-def generate_token(name: str, scope: str, expires_days: int, permissions: list[str], output: str, save: bool) -> None:
+def generate_token(
+    name: str, scope: str, expires_days: int, permissions: list[str], output: str, save: bool
+) -> None:
     """Generate a new automation token.
 
     Examples:
@@ -403,10 +403,9 @@ def revoke_token(token_id: str, yes: bool) -> None:
     """Revoke a token by ID."""
 
     async def _revoke() -> None:
-        if not yes:
-            if not Confirm.ask(f"Are you sure you want to revoke token {token_id}?"):
-                rprint("❌ Cancelled")
-                return
+        if not yes and not Confirm.ask(f"Are you sure you want to revoke token {token_id}?"):
+            rprint("❌ Cancelled")
+            return
 
         manager = TokenManager()
         success = await manager.revoke_token(token_id)
@@ -431,7 +430,7 @@ def github() -> None:
     "--client-secret", prompt=True, hide_input=True, help="GitHub OAuth App Client Secret"
 )
 @click.option("--callback-url", help="OAuth callback URL")
-def setup_github_oauth(client_id: str, client_secret: str, callback_url: str) -> None:
+def setup_github_oauth(client_id: str, _client_secret: str, callback_url: str) -> None:
     """Set up GitHub OAuth configuration.
 
     This will create or update the GitHub OAuth configuration for user authentication.

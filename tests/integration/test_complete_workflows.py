@@ -4,94 +4,34 @@ Tests data consistency across related entities and realistic data volumes.
 """
 
 import asyncio
-from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
-from src.lib.auth import TokenClaims, TokenScope, TokenType
-from src.lib.database import close_database, init_database
-from src.lib.middleware import AuthenticatedUser, UserRole, get_current_context
-from src.main import app
+from httpx import AsyncClient
 
 # Apply pytest.mark.asyncio to all test methods in this module
 pytestmark = pytest.mark.asyncio
 
 
-@pytest.fixture(scope="session")
-async def setup_database():
-    """Set up database for integration tests."""
-    await init_database()
-    yield
-    await close_database()
-
-
-async def setup_test_client():
-    """Set up test client with authentication and database."""
-
-    # Mock authentication for integration tests
-    def mock_auth():
-        claims = TokenClaims(
-            sub="integration:user:123",
-            exp=datetime.now(UTC) + timedelta(hours=1),
-            scope=TokenScope.USER,
-            token_type=TokenType.ACCESS,
-            username="integration_user",
-            email="integration@example.com",
-            role=UserRole.ADMIN,
-        )
-        return AuthenticatedUser(
-            user_id="integration:user:123",
-            username="integration_user",
-            email="integration@example.com",
-            role=UserRole.ADMIN,
-            permissions=[
-                "frameworks:read",
-                "frameworks:write",
-                "frameworks:delete",
-                "environments:read",
-                "environments:write",
-                "environments:delete",
-                "suites:read",
-                "suites:write",
-                "suites:delete",
-                "results:read",
-                "results:write",
-                "results:delete",
-                "artifacts:read",
-                "artifacts:write",
-                "artifacts:delete",
-            ],
-            token_claims=claims,
-        )
-
-    # Override authentication dependencies
-    app.dependency_overrides[get_current_context] = mock_auth
-
-    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-
-
 class TestCompleteWorkflows:
     """Integration tests for complete user workflows."""
 
-    async def test_full_test_execution_workflow(self):
+    async def test_full_test_execution_workflow(self, client: AsyncClient):
         """Test complete workflow from framework creation to test results."""
-        await init_database()  # Ensure database is initialized
-        client = await setup_test_client()
+        # Step 1: Create a test framework
+        framework_data = {
+            "name": "playwright",
+            "version": f"1.55.{hash(str(uuid4())) % 10000}",
+            "metadata": {
+                "actualWorkers": 4,
+                "projects": ["setup", "chrome", "firefox", "webkit"],
+            },
+        }
 
-        async with client:
-            # Step 1: Create a test framework
-            framework_data = {
-                "name": "playwright",
-                "version": f"1.55.{uuid4().hex[:8]}",
-                "metadata": {
-                    "actualWorkers": 4,
-                    "projects": ["setup", "chrome", "firefox", "webkit"],
-                },
-            }
-
-            framework_response = await client.post("/api/v1/frameworks", json=framework_data)
+        framework_response = await client.post("/api/v1/frameworks", json=framework_data)
+        if framework_response.status_code != 201:
+            print(f"Framework creation failed: {framework_response.status_code}")
+            print(f"Response: {framework_response.text}")
         assert framework_response.status_code == 201
         framework = framework_response.json()
         framework_id = framework["id"]
@@ -100,7 +40,7 @@ class TestCompleteWorkflows:
         environments = []
         for browser in ["chrome", "firefox", "webkit"]:
             env_data = {
-                "name": f"{browser}-desktop",
+                "name": f"{browser}-desktop-{uuid4().hex[:8]}",
                 "browser": browser,
                 "os": "linux",
                 "metadata": {"viewport": "1920x1080", "deviceScaleFactor": 1},
@@ -250,12 +190,13 @@ class TestCompleteWorkflows:
         assert len(chrome_envs) == 1
         assert chrome_envs[0]["browser"] == "chrome"
 
+    @pytest.mark.asyncio
     async def test_bulk_operations_performance(self, client: AsyncClient):
         """Test bulk operations with realistic data volumes."""
         # Create framework and environment for bulk testing
         framework_data = {
             "name": "cypress",
-            "version": f"7.2.{uuid4().hex[:8]}",
+            "version": f"7.2.{hash(str(uuid4())) % 10000}",
             "metadata": {"mocha": {"version": "7.2.0"}},
         }
         framework_response = await client.post("/api/v1/frameworks", json=framework_data)
@@ -263,7 +204,7 @@ class TestCompleteWorkflows:
         framework = framework_response.json()
 
         env_data = {
-            "name": "bulk-test-env",
+            "name": f"bulk-test-env-{uuid4().hex[:8]}",
             "browser": "chrome",
             "os": "ubuntu",
             "metadata": {"headless": True},
@@ -359,12 +300,13 @@ class TestCompleteWorkflows:
         page2_ids = {r["id"] for r in page2_results}
         assert len(page1_ids.intersection(page2_ids)) == 0
 
+    @pytest.mark.asyncio
     async def test_data_consistency_across_entities(self, client: AsyncClient):
         """Test data consistency and referential integrity."""
         # Create related entities
         framework_data = {
             "name": "jest",
-            "version": f"28.1.{uuid4().hex[:8]}",
+            "version": f"28.1.{hash(str(uuid4())) % 10000}",
             "metadata": {"testEnvironment": "node"},
         }
         framework_response = await client.post("/api/v1/frameworks", json=framework_data)
@@ -372,7 +314,7 @@ class TestCompleteWorkflows:
         framework = framework_response.json()
 
         env_data = {
-            "name": "node-environment",
+            "name": f"node-environment-{uuid4().hex[:8]}",
             "browser": None,
             "os": "linux",
             "metadata": {"node_version": "18.17.0"},
@@ -425,6 +367,7 @@ class TestCompleteWorkflows:
             "status": "passed",
             "duration_ms": 125,
             "tags": ["unit", "fast"],
+            "full_title": "Unit Test Suite > valid-unit-test",
             "metadata": {"test_file": "user.test.js"},
         }
         result_response = await client.post("/api/v1/results", json=result_data)
@@ -467,12 +410,13 @@ class TestCompleteWorkflows:
         environment_get_response = await client.get(f"/api/v1/environments/{environment['id']}")
         assert environment_get_response.status_code == 200
 
+    @pytest.mark.asyncio
     async def test_concurrent_operations(self, client: AsyncClient):
         """Test concurrent operations to verify database consistency."""
         # Create shared entities
         framework_data = {
             "name": "mocha",
-            "version": f"10.2.{uuid4().hex[:8]}",
+            "version": f"10.2.{hash(str(uuid4())) % 10000}",
             "metadata": {"reporter": "spec"},
         }
         framework_response = await client.post("/api/v1/frameworks", json=framework_data)
@@ -482,7 +426,7 @@ class TestCompleteWorkflows:
         # Create multiple concurrent operations
         async def create_environment_and_suite(browser: str, index: int):
             env_data = {
-                "name": f"concurrent-env-{index}",
+                "name": f"concurrent-env-{index}-{uuid4().hex[:8]}",
                 "browser": browser,
                 "os": "windows",
                 "metadata": {"concurrent_test": True, "index": index},

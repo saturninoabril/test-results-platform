@@ -9,7 +9,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any
 
 import aiohttp
 import click
@@ -42,7 +42,7 @@ class BenchmarkResult:
 class APIBenchmark:
     """API performance benchmarking tool."""
 
-    def __init__(self, base_url: str, auth_token: Optional[str] = None):
+    def __init__(self, base_url: str, auth_token: str | None = None):
         self.base_url = base_url.rstrip("/")
         self.auth_token = auth_token
         self.headers = {}
@@ -55,7 +55,7 @@ class APIBenchmark:
         method: str = "GET",
         requests: int = 1000,
         concurrent: int = 100,
-        data: Optional[Dict[str, Any]] = None,
+        data: dict[str, Any] | None = None,
         timeout: int = 30,
     ) -> BenchmarkResult:
         """Benchmark a specific endpoint."""
@@ -112,10 +112,8 @@ class APIBenchmark:
             with Progress() as progress:
                 task_id = progress.add_task(f"Benchmarking {method} {endpoint}", total=requests)
 
-                completed = 0
-                for coro in asyncio.as_completed(tasks):
+                for completed, coro in enumerate(asyncio.as_completed(tasks), 1):
                     await coro
-                    completed += 1
                     progress.update(task_id, completed=completed)
 
         total_time = time.time() - start_time
@@ -330,7 +328,9 @@ def api(url: str, token: str, requests: int, concurrent: int, export: str) -> No
 @click.option("--requests", default=1000, help="Number of requests")
 @click.option("--concurrent", default=100, help="Concurrent requests")
 @click.option("--data", help="JSON data for POST requests")
-def single(url: str, token: str, endpoint: str, method: str, requests: int, concurrent: int, data: str) -> None:
+def single(
+    url: str, token: str, endpoint: str, method: str, requests: int, concurrent: int, data: str
+) -> None:
     """Benchmark a single endpoint."""
 
     async def run_single_benchmark() -> None:
@@ -375,7 +375,7 @@ def load_test(url: str, token: str, target_rps: int, duration: int) -> None:
         benchmark_tool = APIBenchmark(url, token)
 
         # Calculate requests needed
-        total_requests = target_rps * duration
+        target_rps * duration
         concurrent = min(100, target_rps // 10)  # Reasonable concurrency
 
         start_time = time.time()

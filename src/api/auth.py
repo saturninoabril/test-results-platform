@@ -45,7 +45,7 @@ async def get_authorization_url() -> dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate GitHub OAuth authorization URL",
-        )
+        ) from e
 
 
 @router.post(
@@ -80,12 +80,14 @@ async def exchange_token(request: TokenRequest) -> TokenResponse:
         )
 
         # Get permissions for the user's role
-        permissions = github_client.get_user_permissions(result.user_role) if result.user_role else []
+        permissions = (
+            github_client.get_user_permissions(result.user_role) if result.user_role else []
+        )
 
         if not result.access_token:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to obtain access token from GitHub"
+                detail="Failed to obtain access token from GitHub",
             )
 
         return TokenResponse(
@@ -103,7 +105,7 @@ async def exchange_token(request: TokenRequest) -> TokenResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred during token exchange",
-        )
+        ) from e
 
 
 @router.post(
@@ -149,7 +151,9 @@ async def create_automation_token(
             refresh_token=None,
             token_type="Bearer",
             expires_in=int(result["expires_in_days"]) * 24 * 3600,  # Convert days to seconds
-            permissions=result["permissions"].split(",") if isinstance(result["permissions"], str) and result["permissions"] else None,
+            permissions=result["permissions"].split(",")
+            if isinstance(result["permissions"], str) and result["permissions"]
+            else None,
         )
 
     except HTTPException:
@@ -159,7 +163,7 @@ async def create_automation_token(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while creating automation token",
-        )
+        ) from e
 
 
 @router.get(
@@ -189,7 +193,7 @@ async def get_current_user_profile(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving user profile",
-        )
+        ) from e
 
 
 @router.post(
@@ -218,7 +222,8 @@ async def refresh_token(refresh_token: str) -> TokenResponse:
             token_type=result["token_type"],
             expires_in=int(result["expires_in"]),
             permissions=(
-                perms.split(",") if (perms := result.get("permissions")) and isinstance(perms, str)
+                perms.split(",")
+                if (perms := result.get("permissions")) and isinstance(perms, str)
                 else None
             ),
         )
@@ -230,4 +235,4 @@ async def refresh_token(refresh_token: str) -> TokenResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred during token refresh",
-        )
+        ) from e

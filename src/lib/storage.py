@@ -6,16 +6,15 @@ Supports both MinIO (development) and S3 (production) backends.
 
 import hashlib
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Dict, Optional, List, IO, Any
 from datetime import datetime, timedelta
-import os
-from pathlib import Path
+from typing import IO, Any, Optional
 
 import aioboto3
 import structlog
-from botocore.exceptions import ClientError, NoCredentialsError  # type: ignore[import-untyped]
 from botocore.config import Config  # type: ignore[import-untyped]
+from botocore.exceptions import ClientError, NoCredentialsError  # type: ignore[import-untyped]
 
 from .config import get_settings
 
@@ -34,8 +33,8 @@ class StorageInterface(ABC):
         file_obj: IO[bytes],
         storage_key: str,
         content_type: str,
-        metadata: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]:
+        metadata: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         """Upload file to storage."""
         pass
 
@@ -48,9 +47,9 @@ class StorageInterface(ABC):
     async def download_file_stream(
         self,
         storage_key: str,
-        range_start: Optional[int] = None,
-        range_end: Optional[int] = None,
-    ) -> AsyncGenerator[bytes, None]:
+        range_start: int | None = None,
+        range_end: int | None = None,
+    ) -> AsyncGenerator[bytes]:
         """Download file from storage as streaming bytes with optional range support."""
         pass
 
@@ -64,7 +63,7 @@ class StorageInterface(ABC):
     @abstractmethod
     async def generate_upload_signed_url(
         self, storage_key: str, content_type: str, expiration: int = 3600
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate signed URL for file upload."""
         pass
 
@@ -74,7 +73,7 @@ class StorageInterface(ABC):
         pass
 
     @abstractmethod
-    async def delete_files(self, storage_keys: List[str]) -> Dict[str, bool]:
+    async def delete_files(self, storage_keys: list[str]) -> dict[str, bool]:
         """Delete multiple files from storage."""
         pass
 
@@ -84,14 +83,12 @@ class StorageInterface(ABC):
         pass
 
     @abstractmethod
-    async def list_files(
-        self, prefix: str, limit: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+    async def list_files(self, prefix: str, limit: int | None = None) -> list[dict[str, Any]]:
         """List files with given prefix."""
         pass
 
     @abstractmethod
-    async def get_file_metadata(self, storage_key: str) -> Optional[Dict[str, Any]]:
+    async def get_file_metadata(self, storage_key: str) -> dict[str, Any] | None:
         """Get file metadata."""
         pass
 
@@ -103,7 +100,7 @@ class StorageClient(StorageInterface):
         """Initialize storage client with settings."""
         self.settings = get_settings()
         self._session = None
-        self._bucket_cache: Dict[str, bool] = {}
+        self._bucket_cache: dict[str, bool] = {}
 
     async def _get_session(self) -> aioboto3.Session:
         """Get or create aioboto3 session."""
@@ -207,8 +204,8 @@ class StorageClient(StorageInterface):
         file_obj: IO[bytes],
         storage_key: str,
         content_type: str,
-        metadata: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]:
+        metadata: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         """Upload file to storage with checksum validation and multipart support."""
         bucket_name, object_key = self._parse_storage_key(storage_key)
         await self._ensure_bucket_exists(bucket_name)
@@ -233,13 +230,25 @@ class StorageClient(StorageInterface):
         multipart_threshold = 100 * 1024 * 1024  # 100MB
         if file_size > multipart_threshold:
             return await self._upload_multipart(
-                file_obj, bucket_name, object_key, content_type, upload_metadata,
-                storage_key, file_size, checksum
+                file_obj,
+                bucket_name,
+                object_key,
+                content_type,
+                upload_metadata,
+                storage_key,
+                file_size,
+                checksum,
             )
         else:
             return await self._upload_single_part(
-                file_obj, bucket_name, object_key, content_type, upload_metadata,
-                storage_key, file_size, checksum
+                file_obj,
+                bucket_name,
+                object_key,
+                content_type,
+                upload_metadata,
+                storage_key,
+                file_size,
+                checksum,
             )
 
     async def _upload_single_part(
@@ -248,11 +257,11 @@ class StorageClient(StorageInterface):
         bucket_name: str,
         object_key: str,
         content_type: str,
-        upload_metadata: Dict[str, str],
+        upload_metadata: dict[str, str],
         storage_key: str,
         file_size: int,
         checksum: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Upload file using single-part upload."""
         async with self._get_s3_client() as s3:
             try:
@@ -298,11 +307,11 @@ class StorageClient(StorageInterface):
         bucket_name: str,
         object_key: str,
         content_type: str,
-        upload_metadata: Dict[str, str],
+        upload_metadata: dict[str, str],
         storage_key: str,
         file_size: int,
         checksum: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Upload file using multipart upload for large files."""
         part_size = 10 * 1024 * 1024  # 10MB per part
         parts = []
@@ -343,10 +352,12 @@ class StorageClient(StorageInterface):
                             Body=data,
                         )
 
-                        parts.append({
-                            "PartNumber": part_number,
-                            "ETag": part_response["ETag"],
-                        })
+                        parts.append(
+                            {
+                                "PartNumber": part_number,
+                                "ETag": part_response["ETag"],
+                            }
+                        )
 
                         logger.debug(
                             "Uploaded part",
@@ -386,7 +397,7 @@ class StorageClient(StorageInterface):
                         "upload_id": upload_id,
                     }
 
-                except Exception as e:
+                except Exception:
                     # Abort multipart upload on failure
                     try:
                         await s3.abort_multipart_upload(
@@ -447,7 +458,7 @@ class StorageClient(StorageInterface):
             except ClientError as e:
                 if e.response["Error"]["Code"] == "NoSuchKey":
                     logger.warning("File not found", storage_key=storage_key)
-                    raise FileNotFoundError(f"File not found: {storage_key}")
+                    raise FileNotFoundError(f"File not found: {storage_key}") from e
                 else:
                     logger.error("File download failed", storage_key=storage_key, error=str(e))
                     raise
@@ -455,9 +466,9 @@ class StorageClient(StorageInterface):
     async def download_file_stream(  # type: ignore[override]
         self,
         storage_key: str,
-        range_start: Optional[int] = None,
-        range_end: Optional[int] = None,
-    ) -> AsyncGenerator[bytes, None]:
+        range_start: int | None = None,
+        range_end: int | None = None,
+    ) -> AsyncGenerator[bytes]:
         """Download file from storage as streaming bytes with optional range support."""
         bucket_name, object_key = self._parse_storage_key(storage_key)
 
@@ -505,23 +516,15 @@ class StorageClient(StorageInterface):
             except ClientError as e:
                 if e.response["Error"]["Code"] == "NoSuchKey":
                     logger.warning("File not found for streaming", storage_key=storage_key)
-                    raise FileNotFoundError(f"File not found: {storage_key}")
+                    raise FileNotFoundError(f"File not found: {storage_key}") from e
                 elif e.response["Error"]["Code"] == "InvalidRange":
                     logger.warning("Invalid range request", storage_key=storage_key)
-                    raise ValueError("Invalid range request")
+                    raise ValueError("Invalid range request") from e
                 else:
-                    logger.error(
-                        "File stream failed",
-                        storage_key=storage_key,
-                        error=str(e)
-                    )
+                    logger.error("File stream failed", storage_key=storage_key, error=str(e))
                     raise
 
-    def _build_range_header(
-        self,
-        range_start: Optional[int],
-        range_end: Optional[int]
-    ) -> str:
+    def _build_range_header(self, range_start: int | None, range_end: int | None) -> str:
         """Build HTTP Range header for partial content requests."""
         if range_start is not None and range_end is not None:
             if range_start > range_end:
@@ -581,7 +584,7 @@ class StorageClient(StorageInterface):
 
     async def generate_upload_signed_url(
         self, storage_key: str, content_type: str, expiration: int = 3600
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate signed URL for direct file upload with metadata."""
         bucket_name, object_key = self._parse_storage_key(storage_key)
         await self._ensure_bucket_exists(bucket_name)
@@ -661,12 +664,12 @@ class StorageClient(StorageInterface):
                 )
                 return False
 
-    async def delete_files(self, storage_keys: List[str]) -> Dict[str, bool]:
+    async def delete_files(self, storage_keys: list[str]) -> dict[str, bool]:
         """Delete multiple files from storage."""
         results = {}
 
         # Group keys by bucket for efficient batch operations
-        bucket_groups: Dict[str, List[str]] = {}
+        bucket_groups: dict[str, list[str]] = {}
         for storage_key in storage_keys:
             bucket_name, object_key = self._parse_storage_key(storage_key)
             if bucket_name not in bucket_groups:
@@ -741,9 +744,7 @@ class StorageClient(StorageInterface):
                     )
                     raise
 
-    async def list_files(
-        self, prefix: str, limit: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+    async def list_files(self, prefix: str, limit: int | None = None) -> list[dict[str, Any]]:
         """List files with given prefix."""
         # Parse prefix to extract bucket info
         bucket_type = prefix.split("/")[0]
@@ -762,12 +763,14 @@ class StorageClient(StorageInterface):
                 async for page in page_iterator:
                     for obj in page.get("Contents", []):
                         storage_key = f"{bucket_type}/{obj['Key']}"
-                        files.append({
-                            "storage_key": storage_key,
-                            "size": obj["Size"],
-                            "last_modified": obj["LastModified"],
-                            "etag": obj["ETag"].strip('"'),
-                        })
+                        files.append(
+                            {
+                                "storage_key": storage_key,
+                                "size": obj["Size"],
+                                "last_modified": obj["LastModified"],
+                                "etag": obj["ETag"].strip('"'),
+                            }
+                        )
 
                         if limit and len(files) >= limit:
                             return files
@@ -782,7 +785,7 @@ class StorageClient(StorageInterface):
 
         return files
 
-    async def get_file_metadata(self, storage_key: str) -> Optional[Dict[str, Any]]:
+    async def get_file_metadata(self, storage_key: str) -> dict[str, Any] | None:
         """Get file metadata."""
         bucket_name, object_key = self._parse_storage_key(storage_key)
 
@@ -853,7 +856,7 @@ def get_storage_client() -> StorageClient:
 
 
 @asynccontextmanager
-async def get_storage() -> AsyncGenerator[StorageClient, None]:
+async def get_storage() -> AsyncGenerator[StorageClient]:
     """Get storage client with automatic initialization."""
     if _storage_client is None:
         await init_storage()
@@ -882,7 +885,7 @@ def generate_storage_key(artifact_type: str, *path_parts: str) -> str:
     return f"{artifact_type}/{'/'.join(clean_parts)}"
 
 
-def parse_storage_key(storage_key: str) -> Dict[str, str]:
+def parse_storage_key(storage_key: str) -> dict[str, str]:
     """Parse storage key into components."""
     parts = storage_key.split("/")
     if len(parts) < 2:
@@ -906,12 +909,12 @@ class StorageLifecycleManager:
     async def cleanup_expired_artifacts(
         self,
         max_age_days: int,
-        artifact_types: Optional[List[str]] = None,
+        artifact_types: list[str] | None = None,
         dry_run: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Clean up artifacts older than specified days."""
         cutoff_date = datetime.utcnow() - timedelta(days=max_age_days)
-        cleanup_results: Dict[str, Any] = {
+        cleanup_results: dict[str, Any] = {
             "cutoff_date": cutoff_date.isoformat(),
             "max_age_days": max_age_days,
             "artifacts_scanned": 0,
@@ -949,7 +952,7 @@ class StorageLifecycleManager:
 
                     # Handle both datetime objects and ISO strings
                     if isinstance(last_modified, str):
-                        last_modified = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
+                        last_modified = datetime.fromisoformat(last_modified.replace("Z", "+00:00"))
 
                     # Remove timezone info for comparison
                     if last_modified.tzinfo is not None:
@@ -1003,11 +1006,11 @@ class StorageLifecycleManager:
 
     async def enforce_retention_policy(
         self,
-        retention_rules: Dict[str, int],
+        retention_rules: dict[str, int],
         dry_run: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Enforce retention policies for different artifact types."""
-        policy_results: Dict[str, Any] = {
+        policy_results: dict[str, Any] = {
             "retention_rules": retention_rules,
             "dry_run": dry_run,
             "results_by_type": {},
@@ -1075,11 +1078,11 @@ class StorageLifecycleManager:
     async def cleanup_suite_artifacts(
         self,
         suite_pattern: str,
-        max_age_days: Optional[int] = None,
+        max_age_days: int | None = None,
         dry_run: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Clean up all artifacts for test suites matching a pattern."""
-        cleanup_results: Dict[str, Any] = {
+        cleanup_results: dict[str, Any] = {
             "suite_pattern": suite_pattern,
             "max_age_days": max_age_days,
             "dry_run": dry_run,
@@ -1122,7 +1125,9 @@ class StorageLifecycleManager:
 
                             # Handle timezone-aware datetime objects
                             if isinstance(last_modified, str):
-                                last_modified = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
+                                last_modified = datetime.fromisoformat(
+                                    last_modified.replace("Z", "+00:00")
+                                )
 
                             if last_modified.tzinfo is not None:
                                 last_modified = last_modified.replace(tzinfo=None)
@@ -1177,13 +1182,13 @@ class StorageLifecycleManager:
         return cleanup_results
 
     async def get_storage_usage_stats(
-        self, artifact_types: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
+        self, artifact_types: list[str] | None = None
+    ) -> dict[str, Any]:
         """Get storage usage statistics by artifact type."""
         if artifact_types is None:
             artifact_types = ["screenshots", "videos", "reports", "logs"]
 
-        usage_stats: Dict[str, Any] = {
+        usage_stats: dict[str, Any] = {
             "timestamp": datetime.utcnow().isoformat(),
             "artifact_types": artifact_types,
             "total_files": 0,
@@ -1194,7 +1199,7 @@ class StorageLifecycleManager:
         logger.info("Collecting storage usage statistics", artifact_types=artifact_types)
 
         for artifact_type in artifact_types:
-            type_stats: Dict[str, Any] = {
+            type_stats: dict[str, Any] = {
                 "file_count": 0,
                 "total_size_bytes": 0,
                 "oldest_file": None,

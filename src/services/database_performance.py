@@ -8,11 +8,10 @@ import time
 from collections import defaultdict
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from typing import Any
 
-from sqlalchemy import text
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import QueuePool
 
@@ -105,11 +104,15 @@ class PerformantDatabaseManager:
         """Set up SQLAlchemy event listeners for performance monitoring."""
 
         @event.listens_for(self.engine.sync_engine, "before_cursor_execute")
-        def before_cursor_execute(conn: Any, cursor: Any, statement: str, parameters: Any, context: Any, executemany: bool) -> None:
+        def before_cursor_execute(
+            conn: Any, cursor: Any, statement: str, parameters: Any, context: Any, executemany: bool
+        ) -> None:
             context._query_start_time = time.time()
 
         @event.listens_for(self.engine.sync_engine, "after_cursor_execute")
-        def after_cursor_execute(conn: Any, cursor: Any, statement: str, parameters: Any, context: Any, executemany: bool) -> None:
+        def after_cursor_execute(
+            conn: Any, cursor: Any, statement: str, parameters: Any, context: Any, executemany: bool
+        ) -> None:
             total = time.time() - context._query_start_time
 
             if self.enable_query_logging:
@@ -163,7 +166,7 @@ class PerformantDatabaseManager:
     @asynccontextmanager
     async def get_optimized_session(
         self, read_only: bool = False, isolation_level: str | None = None
-    ) -> AsyncGenerator[AsyncSession, None]:
+    ) -> AsyncGenerator[AsyncSession]:
         """Get session with specific optimizations."""
         async with self.session_factory() as session:
             try:
@@ -311,7 +314,9 @@ class PerformantDatabaseManager:
 perf_db_manager: PerformantDatabaseManager | None = None
 
 
-async def init_performant_database(database_url: str | None = None, **kwargs: Any) -> PerformantDatabaseManager:
+async def init_performant_database(
+    database_url: str | None = None, **kwargs: Any
+) -> PerformantDatabaseManager:
     """Initialize high-performance database connection."""
     global perf_db_manager
 

@@ -107,7 +107,7 @@ class SuiteService:
             except IntegrityError as e:
                 await session.rollback()
                 logger.error("Suite creation failed", error=str(e))
-                raise SuiteValidationError(f"Suite creation failed: {str(e)}")
+                raise SuiteValidationError(f"Suite creation failed: {str(e)}") from e
 
     @staticmethod
     async def get_suites() -> list[SuiteResponse]:
@@ -184,7 +184,7 @@ class SuiteService:
             except IntegrityError as e:
                 await session.rollback()
                 logger.error("Suite update failed", error=str(e))
-                raise SuiteValidationError(f"Suite update failed: {str(e)}")
+                raise SuiteValidationError(f"Suite update failed: {str(e)}") from e
 
     @staticmethod
     async def delete_suite(suite_id: UUID) -> None:

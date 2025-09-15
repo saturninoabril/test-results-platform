@@ -6,8 +6,6 @@ Provides file management, cleanup, usage reporting, backup/restore utilities, an
 
 import asyncio
 import json
-import sys
-import time
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -22,7 +20,6 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 # Import from the parent services
-
 from ..lib.config import get_settings
 from ..lib.database import get_session, init_database
 from ..lib.storage import close_storage, get_storage_client, init_storage
@@ -337,7 +334,6 @@ class StorageManager:
             # Restore database records (if needed)
             db_backup_path = backup_path / "artifacts_db.json"
             db_backup: list[dict[str, Any]] = []
-            restored_db_records = 0
 
             if db_backup_path.exists():
                 with open(db_backup_path) as f:
@@ -361,7 +357,12 @@ class StorageManager:
 
     async def health_check(self) -> dict[str, Any]:
         """Perform comprehensive storage health check."""
-        health_status: dict[str, Any] = {"overall_healthy": True, "checks": {}, "warnings": [], "errors": []}
+        health_status: dict[str, Any] = {
+            "overall_healthy": True,
+            "checks": {},
+            "warnings": [],
+            "errors": [],
+        }
 
         try:
             await init_storage()
@@ -469,7 +470,7 @@ class StorageManager:
             # Test list performance
             list_times = []
 
-            for i in track(range(min(test_count, 5)), description="Testing list performance..."):
+            for _ in track(range(min(test_count, 5)), description="Testing list performance..."):
                 start_time = time.time()
                 await storage_client.list_files("", limit=100)
                 list_time = time.time() - start_time
@@ -587,7 +588,9 @@ def show_usage(ctx: Any, format: str) -> None:
 )
 @click.option("--confirm", is_flag=True, help="Actually perform the cleanup")
 @click.pass_context
-def cleanup_storage(ctx: Any, orphaned: bool, old_files: bool, older_than: int, dry_run: bool, confirm: bool) -> None:
+def cleanup_storage(
+    ctx: Any, orphaned: bool, old_files: bool, older_than: int, dry_run: bool, confirm: bool
+) -> None:
     """Clean up storage by removing orphaned or old files.
 
     Examples:

@@ -66,10 +66,13 @@ class TestFramework(BaseModel):
             raise ValueError("Version must follow semantic versioning (e.g., '1.2.3')")
 
         try:
-            for part in parts[:3]:  # Major, minor, patch should be numeric
+            for i, part in enumerate(parts[:3]):  # Major, minor, patch should be numeric
+                # Handle pre-release tags (e.g., "1.0.0-beta")
+                if i == 2 and "-" in part:  # Patch version with pre-release tag
+                    part = part.split("-")[0]  # Extract numeric part only
                 int(part)
         except ValueError:
-            raise ValueError("Version parts must be numeric")
+            raise ValueError("Version parts must be numeric") from None
 
         return version.strip()
 

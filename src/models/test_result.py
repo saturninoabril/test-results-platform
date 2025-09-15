@@ -105,11 +105,11 @@ class TestResult(BaseModel):
     )
 
     # Relationships
-    suite: Mapped["TestSuite"] = relationship(
+    suite: Mapped[TestSuite] = relationship(
         "TestSuite", back_populates="test_results", lazy="select"
     )
 
-    test_artifacts: Mapped[list["TestArtifact"]] = relationship(
+    test_artifacts: Mapped[list[TestArtifact]] = relationship(
         "TestArtifact", back_populates="test_result", cascade="all, delete-orphan", lazy="select"
     )
 

@@ -4,30 +4,30 @@ Creates data migration scripts and validates data model compatibility.
 """
 
 import asyncio
-import sys
-import os
 import json
+import sys
 import time
-from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Any, Optional
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 # Add the project root to the path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from httpx import AsyncClient, ASGITransport
-from src.main import app
-from src.lib.middleware import get_current_context, AuthenticatedUser, UserRole
+from httpx import ASGITransport, AsyncClient
+
 from src.lib.auth import TokenClaims, TokenScope, TokenType
 from src.lib.database import init_database
+from src.lib.middleware import AuthenticatedUser, UserRole, get_current_context
+from src.main import app
 
 
 def mock_auth():
     """Create mock authentication for API calls."""
     claims = TokenClaims(
         sub="data_migration:user:admin",
-        exp=datetime.now(timezone.utc) + timedelta(hours=24),
+        exp=datetime.now(UTC) + timedelta(hours=24),
         scope=TokenScope.USER,
         token_type=TokenType.ACCESS,
         username="data_migration_admin",
@@ -59,11 +59,11 @@ class PlaywrightDataMigrator:
         self.created_environments = {}
         self.created_suites = {}
 
-    async def load_playwright_data(self, file_path: str) -> Dict[str, Any]:
+    async def load_playwright_data(self, file_path: str) -> dict[str, Any]:
         """Load and validate Playwright JSON data."""
         print(f"📖 Loading Playwright data from {file_path}")
 
-        with open(file_path, 'r') as f:
+        with open(file_path) as f:
             data = json.load(f)
 
         # Validate required structure
@@ -75,9 +75,8 @@ class PlaywrightDataMigrator:
         print(f"✅ Loaded Playwright data: {data['stats']['expected']} expected tests")
         return data
 
-    async def create_framework_from_playwright(self, config: Dict[str, Any]) -> str:
+    async def create_framework_from_playwright(self, config: dict[str, Any]) -> str:
         """Create framework from Playwright config."""
-        import time
         timestamp = int(time.time())
 
         framework_data = {
@@ -106,11 +105,10 @@ class PlaywrightDataMigrator:
         print(f"✅ Created framework: {framework['name']} v{framework['version']}")
         return framework["id"]
 
-    async def create_environments_from_playwright(self, config: Dict[str, Any]) -> Dict[str, str]:
+    async def create_environments_from_playwright(self, config: dict[str, Any]) -> dict[str, str]:
         """Create environments from Playwright projects."""
         environments = {}
 
-        import time
         timestamp = int(time.time())
 
         for project in config.get("projects", []):
@@ -154,7 +152,7 @@ class PlaywrightDataMigrator:
         return environments
 
     async def create_suite_from_playwright(self, framework_id: str, environment_id: str,
-                                         suite_data: Dict[str, Any], stats: Dict[str, Any]) -> str:
+                                         suite_data: dict[str, Any], stats: dict[str, Any]) -> str:
         """Create test suite from Playwright suite data."""
 
         # Count tests for this project
@@ -169,7 +167,7 @@ class PlaywrightDataMigrator:
         skipped_tests = sum(1 for test in project_tests if test.get("status") == "skipped")
 
         # Calculate timing
-        start_time = datetime.fromisoformat(stats["startTime"].replace("Z", "+00:00"))
+        datetime.fromisoformat(stats["startTime"].replace("Z", "+00:00"))
         duration_ms = int(stats.get("duration", 0))
 
         suite_create_data = {
@@ -204,7 +202,7 @@ class PlaywrightDataMigrator:
         print(f"✅ Created suite: {suite['name']} ({total_tests} tests)")
         return suite["id"]
 
-    async def create_results_from_playwright(self, suite_id: str, suite_data: Dict[str, Any]) -> List[str]:
+    async def create_results_from_playwright(self, suite_id: str, suite_data: dict[str, Any]) -> list[str]:
         """Create test results from Playwright suite data."""
         results = []
 
@@ -216,10 +214,7 @@ class PlaywrightDataMigrator:
                 for result in test.get("results", []):
                     # Map status
                     status = result.get("status", "unknown")
-                    if status in ["passed", "failed", "skipped"]:
-                        api_status = status
-                    else:
-                        api_status = "failed"
+                    api_status = status if status in ["passed", "failed", "skipped"] else "failed"
 
                     # Extract error information
                     error_message = None
@@ -264,7 +259,7 @@ class PlaywrightDataMigrator:
         print(f"✅ Created {len(results)} test results")
         return results
 
-    async def migrate_playwright_data(self, file_path: str) -> Dict[str, Any]:
+    async def migrate_playwright_data(self, file_path: str) -> dict[str, Any]:
         """Complete migration of Playwright data."""
         print("🔄 Starting Playwright data migration...")
 
@@ -366,11 +361,11 @@ class CypressDataMigrator:
         self.created_environments = {}
         self.created_suites = {}
 
-    async def load_cypress_data(self, file_path: str) -> Dict[str, Any]:
+    async def load_cypress_data(self, file_path: str) -> dict[str, Any]:
         """Load and validate Cypress JSON data."""
         print(f"📖 Loading Cypress data from {file_path}")
 
-        with open(file_path, 'r') as f:
+        with open(file_path) as f:
             data = json.load(f)
 
         # Validate required structure
@@ -382,9 +377,8 @@ class CypressDataMigrator:
         print(f"✅ Loaded Cypress data: {data['stats']['tests']} total tests")
         return data
 
-    async def create_framework_from_cypress(self, meta: Dict[str, Any]) -> str:
+    async def create_framework_from_cypress(self, meta: dict[str, Any]) -> str:
         """Create framework from Cypress meta."""
-        import time
         timestamp = int(time.time())
 
         mocha_version = meta.get("mocha", {}).get("version", "7.2.0")
@@ -420,9 +414,8 @@ class CypressDataMigrator:
         print(f"✅ Created framework: {framework['name']} v{framework['version']}")
         return framework["id"]
 
-    async def create_environment_from_cypress(self, meta: Dict[str, Any]) -> str:
+    async def create_environment_from_cypress(self, meta: dict[str, Any]) -> str:
         """Create environment from Cypress meta."""
-        import time
         timestamp = int(time.time())
         test_meta = meta.get("marge", {}).get("options", {}).get("testMeta", {})
 
@@ -454,12 +447,12 @@ class CypressDataMigrator:
         return environment["id"]
 
     async def create_suite_from_cypress(self, framework_id: str, environment_id: str,
-                                      stats: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
+                                      stats: dict[str, Any], _results: list[dict[str, Any]]) -> str:
         """Create test suite from Cypress stats and results."""
 
         # Calculate timing
-        start_time = datetime.fromisoformat(stats["start"].replace("Z", "+00:00"))
-        end_time = datetime.fromisoformat(stats["end"].replace("Z", "+00:00"))
+        datetime.fromisoformat(stats["start"].replace("Z", "+00:00"))
+        datetime.fromisoformat(stats["end"].replace("Z", "+00:00"))
         duration_ms = int(stats.get("duration", 0))
 
         suite_create_data = {
@@ -494,7 +487,7 @@ class CypressDataMigrator:
         print(f"✅ Created suite: {suite['name']} ({suite_create_data['total_count']} tests)")
         return suite["id"]
 
-    async def create_results_from_cypress(self, suite_id: str, results: List[Dict[str, Any]]) -> List[str]:
+    async def create_results_from_cypress(self, suite_id: str, results: list[dict[str, Any]]) -> list[str]:
         """Create test results from Cypress results data."""
         created_results = []
 
@@ -588,7 +581,7 @@ class CypressDataMigrator:
         print(f"✅ Created {len(created_results)} test results")
         return created_results
 
-    async def migrate_cypress_data(self, file_path: str) -> Dict[str, Any]:
+    async def migrate_cypress_data(self, file_path: str) -> dict[str, Any]:
         """Complete migration of Cypress data."""
         print("🔄 Starting Cypress data migration...")
 
@@ -719,18 +712,18 @@ async def run_data_migration():
         print("📊 MIGRATION SUMMARY")
         print("=" * 60)
 
-        print(f"🎭 Playwright Migration:")
+        print("🎭 Playwright Migration:")
         print(f"   • Framework: {playwright_migrator.created_frameworks.get('playwright', {}).get('name', 'N/A')}")
         print(f"   • Environments: {len(playwright_migrator.created_environments)}")
         print(f"   • Suites: {len(playwright_results.get('suites', []))}")
         print(f"   • Results: {playwright_results.get('total_results', 0)}")
 
-        print(f"\n🌲 Cypress Migration:")
+        print("\n🌲 Cypress Migration:")
         print(f"   • Framework: {cypress_migrator.created_frameworks.get('cypress', {}).get('name', 'N/A')}")
         print(f"   • Environment: {cypress_migrator.created_environments.get('cypress-env', {}).get('name', 'N/A')}")
         print(f"   • Results: {cypress_results.get('total_results', 0)}")
 
-        print(f"\n📈 Total Database Contents:")
+        print("\n📈 Total Database Contents:")
         print(f"   • Frameworks: {validation_results['frameworks_count']}")
         print(f"   • Environments: {validation_results['environments_count']}")
         print(f"   • Suites: {validation_results['suites_count']}")

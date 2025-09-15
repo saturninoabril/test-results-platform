@@ -25,7 +25,7 @@ class CLIConfig:
         """Load CLI configuration."""
         if self.config_file.exists():
             with open(self.config_file) as f:
-                return cast(dict[str, Any], json.load(f))
+                return cast("dict[str, Any]", json.load(f))
         return self._default_config()
 
     def save_config(self, config: dict[str, Any]) -> None:
@@ -47,7 +47,7 @@ class CLIConfig:
         """Load CLI profiles."""
         if self.profiles_file.exists():
             with open(self.profiles_file) as f:
-                return cast(dict[str, Any], json.load(f))
+                return cast("dict[str, Any]", json.load(f))
         return {"default": self._default_profile()}
 
     def save_profiles(self, profiles: dict[str, Any]) -> None:
@@ -70,7 +70,7 @@ class CLIConfig:
         config = self.load_config()
         profiles = self.load_profiles()
         profile_name = config.get("default_profile", "default")
-        return cast(dict[str, Any], profiles.get(profile_name, self._default_profile()))
+        return cast("dict[str, Any]", profiles.get(profile_name, self._default_profile()))
 
     def set_active_profile(self, profile_name: str) -> bool:
         """Set the active profile."""
@@ -204,7 +204,9 @@ def list_profiles() -> None:
 @click.option("--api-endpoint", help="API endpoint URL")
 @click.option("--copy-from", help="Copy settings from existing profile")
 @click.option("--activate", is_flag=True, help="Make this the active profile")
-def create_profile(name: str, api_endpoint: str | None, copy_from: str | None, activate: bool) -> None:
+def create_profile(
+    name: str, api_endpoint: str | None, copy_from: str | None, activate: bool
+) -> None:
     """Create a new profile.
 
     Examples:
@@ -263,10 +265,9 @@ def delete_profile(name: str, yes: bool) -> None:
         rprint("❌ Cannot delete the default profile")
         return
 
-    if not yes:
-        if not click.confirm(f"Delete profile '{name}'?"):
-            rprint("❌ Cancelled")
-            return
+    if not yes and not click.confirm(f"Delete profile '{name}'?"):
+        rprint("❌ Cancelled")
+        return
 
     cli_config = CLIConfig()
     profiles = cli_config.load_profiles()

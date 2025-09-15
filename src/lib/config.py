@@ -4,7 +4,7 @@ Handles environment-specific settings for database, storage, authentication, and
 """
 
 from functools import lru_cache
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -39,7 +39,9 @@ class StorageSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="STORAGE_", extra="ignore")
 
     type: str = Field(default="minio", description="Storage type (minio or s3)")
-    endpoint: Optional[str] = Field(default="http://localhost:9000", description="Storage endpoint URL")
+    endpoint: str | None = Field(
+        default="http://localhost:9000", description="Storage endpoint URL"
+    )
     access_key: str = Field(default="minioadmin", description="Storage access key")
     secret_key: str = Field(default="minioadmin123", description="Storage secret key")
     region: str = Field(default="us-east-1", description="Storage region")
@@ -75,11 +77,13 @@ class AuthSettings(BaseSettings):
         description="JWT secret key",
     )
     jwt_algorithm: str = Field(default="HS256", description="JWT algorithm")
-    jwt_expiration_hours: int = Field(default=24, ge=1, le=168, description="JWT expiration in hours")
+    jwt_expiration_hours: int = Field(
+        default=24, ge=1, le=168, description="JWT expiration in hours"
+    )
 
     # GitHub OAuth settings
-    github_client_id: Optional[str] = Field(default=None, description="GitHub OAuth client ID")
-    github_client_secret: Optional[str] = Field(default=None, description="GitHub OAuth client secret")
+    github_client_id: str | None = Field(default=None, description="GitHub OAuth client ID")
+    github_client_secret: str | None = Field(default=None, description="GitHub OAuth client secret")
     github_redirect_uri: str = Field(
         default="http://localhost:8000/api/v1/auth/callback",
         description="GitHub OAuth redirect URI",
@@ -113,21 +117,23 @@ class MattermostSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="MATTERMOST_", extra="ignore")
 
-    webhook_url: Optional[str] = Field(default=None, description="Mattermost webhook URL")
+    webhook_url: str | None = Field(default=None, description="Mattermost webhook URL")
     username: str = Field(default="Test Results Bot", description="Webhook username")
-    icon_url: Optional[str] = Field(default=None, description="Bot icon URL")
-    channel: Optional[str] = Field(default=None, description="Default channel to post to")
+    icon_url: str | None = Field(default=None, description="Bot icon URL")
+    channel: str | None = Field(default=None, description="Default channel to post to")
     enabled: bool = Field(default=False, description="Enable Mattermost notifications")
 
     # Notification settings
     notify_test_failures: bool = Field(default=True, description="Notify on test failures")
     notify_suite_completion: bool = Field(default=True, description="Notify on suite completion")
     notify_high_failure_rate: bool = Field(default=True, description="Notify on high failure rate")
-    failure_rate_threshold: float = Field(default=0.1, ge=0.0, le=1.0, description="Failure rate threshold (0.0-1.0)")
+    failure_rate_threshold: float = Field(
+        default=0.1, ge=0.0, le=1.0, description="Failure rate threshold (0.0-1.0)"
+    )
 
     @field_validator("webhook_url")
     @classmethod
-    def validate_webhook_url(cls, v: Optional[str]) -> Optional[str]:
+    def validate_webhook_url(cls, v: str | None) -> str | None:
         """Validate Mattermost webhook URL format."""
         if v and not v.startswith(("http://", "https://")):
             raise ValueError("Webhook URL must start with http:// or https://")
@@ -145,21 +151,23 @@ class AppSettings(BaseSettings):
         default="REST API for managing test execution results from end-to-end testing frameworks",
         description="Application description",
     )
-    env: str = Field(default="development", description="Environment (development, staging, production)")
+    env: str = Field(
+        default="development", description="Environment (development, staging, production)"
+    )
     debug: bool = Field(default=False, description="Debug mode")
     log_level: str = Field(default="info", description="Logging level")
 
     # API configuration
     api_prefix: str = Field(default="/api/v1", description="API prefix")
-    docs_url: Optional[str] = Field(default="/docs", description="Swagger UI URL")
-    redoc_url: Optional[str] = Field(default="/redoc", description="ReDoc URL")
+    docs_url: str | None = Field(default="/docs", description="Swagger UI URL")
+    redoc_url: str | None = Field(default="/redoc", description="ReDoc URL")
 
     # Performance settings
     max_requests_per_second: int = Field(default=1000, ge=1, description="Max requests per second")
     request_timeout: int = Field(default=30, ge=1, le=300, description="Request timeout in seconds")
 
     # CORS settings
-    cors_origins: List[str] = Field(
+    cors_origins: list[str] = Field(
         default=["http://localhost:3000", "http://localhost:8080"],
         description="Allowed CORS origins",
     )
@@ -202,7 +210,7 @@ class Settings(BaseSettings):
     mattermost: MattermostSettings = Field(default_factory=MattermostSettings)
 
     # Redis settings (optional)
-    redis_url: Optional[str] = Field(default="redis://localhost:6379/0", description="Redis URL")
+    redis_url: str | None = Field(default="redis://localhost:6379/0", description="Redis URL")
 
     def get_bucket_name(self, artifact_type: str) -> str:
         """Get bucket name for artifact type and environment."""
@@ -216,7 +224,7 @@ class Settings(BaseSettings):
         """Check if running in development environment."""
         return self.app.env == "development"
 
-    def get_cors_config(self) -> Dict[str, Any]:
+    def get_cors_config(self) -> dict[str, Any]:
         """Get CORS configuration dictionary."""
         return {
             "allow_origins": self.app.cors_origins,
@@ -226,7 +234,7 @@ class Settings(BaseSettings):
         }
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     """Get cached application settings."""
     return Settings()

@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, ValidationInfo
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
 class BaseAPIModel(BaseModel):
@@ -146,7 +146,7 @@ class SuiteCreateRequest(BaseAPIModel):
 
     @field_validator("passed_count", "failed_count", "skipped_count")
     @classmethod
-    def validate_counts_sum(cls, v: int, info: ValidationInfo) -> int:
+    def validate_counts_sum(cls, v: int, _info: ValidationInfo) -> int:
         """Validate that counts don't exceed total."""
         # This validation will be done at the model level after all fields are set
         return v

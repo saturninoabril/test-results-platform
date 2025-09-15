@@ -7,7 +7,7 @@ import hmac
 import logging
 import time
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Request, Response, status
@@ -108,7 +108,7 @@ class RequestSizeMiddleware(BaseHTTPMiddleware):
 class IPWhitelistMiddleware(BaseHTTPMiddleware):
     """Middleware to whitelist IP addresses (optional)."""
 
-    def __init__(self, app: Any, allowed_ips: Optional[list[str]] = None) -> None:
+    def __init__(self, app: Any, allowed_ips: list[str] | None = None) -> None:
         super().__init__(app)
         self.allowed_ips = allowed_ips or []
 
@@ -225,7 +225,7 @@ def configure_rate_limiting(app: FastAPI, settings: Settings) -> Limiter:
     return limiter
 
 
-def configure_trusted_hosts(app: FastAPI, allowed_hosts: Optional[list[str]] = None) -> None:
+def configure_trusted_hosts(app: FastAPI, allowed_hosts: list[str] | None = None) -> None:
     """Configure trusted host middleware."""
 
     if not allowed_hosts:
@@ -258,7 +258,7 @@ def setup_security_middleware(app: FastAPI, settings: Settings) -> dict[str, Any
     security_config["cors_origins"] = settings.get_cors_origins()
 
     # Configure rate limiting
-    limiter = configure_rate_limiting(app, settings)
+    configure_rate_limiting(app, settings)
     security_config["rate_limiting"] = settings.security.rate_limit_enabled
 
     # Configure trusted hosts for production
@@ -282,7 +282,9 @@ def setup_security_middleware(app: FastAPI, settings: Settings) -> dict[str, Any
         security_config["ip_whitelist"] = len(allowed_ips)
 
     # Optional: Webhook signature validation
-    webhook_secret = settings.security.webhook_secret if hasattr(settings.security, 'webhook_secret') else None
+    webhook_secret = (
+        settings.security.webhook_secret if hasattr(settings.security, "webhook_secret") else None
+    )
     if webhook_secret:
         app.add_middleware(WebhookSignatureMiddleware, webhook_secret=webhook_secret)
         security_config["webhook_auth"] = True
@@ -365,10 +367,7 @@ def validate_api_key(api_key: str) -> bool:
         return False
 
     # Should contain alphanumeric characters
-    if not any(c.isalnum() for c in api_key):
-        return False
-
-    return True
+    return any(c.isalnum() for c in api_key)
 
 
 def generate_request_id() -> str:
@@ -378,7 +377,9 @@ def generate_request_id() -> str:
     return str(uuid.uuid4())
 
 
-def mask_sensitive_data(data: dict[str, Any], sensitive_keys: Optional[list[str]] = None) -> dict[str, Any]:
+def mask_sensitive_data(
+    data: dict[str, Any], sensitive_keys: list[str] | None = None
+) -> dict[str, Any]:
     """Mask sensitive data in logs/responses."""
 
     if sensitive_keys is None:

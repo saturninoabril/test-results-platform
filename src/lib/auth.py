@@ -6,8 +6,8 @@ Supports different token scopes (user, automation) with proper claims and expira
 import secrets
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
-from uuid import UUID, uuid4
+from typing import Any
+from uuid import uuid4
 
 import jwt
 import structlog
@@ -20,6 +20,7 @@ logger = structlog.get_logger()
 
 class TokenScope(str, Enum):
     """Token scope enumeration."""
+
     USER = "user"
     AUTOMATION = "automation"
     ADMIN = "admin"
@@ -28,6 +29,7 @@ class TokenScope(str, Enum):
 
 class UserRole(str, Enum):
     """User role enumeration."""
+
     ADMIN = "admin"
     USER = "user"
     READONLY = "readonly"
@@ -35,6 +37,7 @@ class UserRole(str, Enum):
 
 class TokenType(str, Enum):
     """Token type enumeration."""
+
     ACCESS = "access"
     REFRESH = "refresh"
     AUTOMATION = "automation"
@@ -42,6 +45,7 @@ class TokenType(str, Enum):
 
 class TokenClaims(BaseModel):
     """JWT token claims structure."""
+
     sub: str = Field(..., description="Subject (user ID)")
     iss: str = Field(default="test-results-api", description="Issuer")
     aud: str = Field(default="test-results-api", description="Audience")
@@ -52,16 +56,16 @@ class TokenClaims(BaseModel):
     token_type: TokenType = Field(..., description="Token type")
 
     # User-specific claims
-    username: Optional[str] = Field(None, description="Username")
-    email: Optional[str] = Field(None, description="User email")
-    role: Optional[UserRole] = Field(None, description="User role")
-    github_id: Optional[int] = Field(None, description="GitHub user ID")
+    username: str | None = Field(None, description="Username")
+    email: str | None = Field(None, description="User email")
+    role: UserRole | None = Field(None, description="User role")
+    github_id: int | None = Field(None, description="GitHub user ID")
 
     # Automation-specific claims
-    automation_name: Optional[str] = Field(None, description="Automation system name")
-    permissions: List[str] = Field(default_factory=list, description="Token permissions")
+    automation_name: str | None = Field(None, description="Automation system name")
+    permissions: list[str] = Field(default_factory=list, description="Token permissions")
 
-    @field_validator('exp', 'iat')
+    @field_validator("exp", "iat")
     @classmethod
     def validate_datetime_as_timestamp(cls, v: datetime) -> datetime:
         """Ensure datetime values are timezone-naive UTC."""
@@ -69,12 +73,12 @@ class TokenClaims(BaseModel):
             v = v.replace(tzinfo=None)
         return v
 
-    def model_dump_for_jwt(self) -> Dict[str, Any]:
+    def model_dump_for_jwt(self) -> dict[str, Any]:
         """Dump model for JWT encoding with timestamps as integers."""
-        data = self.model_dump(mode='json', exclude_none=True)
+        data = self.model_dump(mode="json", exclude_none=True)
 
         # Convert datetime fields to timestamps
-        for field in ['exp', 'iat']:
+        for field in ["exp", "iat"]:
             if field in data and isinstance(data[field], str):
                 # If it's already serialized as ISO string, parse it back
                 dt = datetime.fromisoformat(data[field])
@@ -87,11 +91,12 @@ class TokenClaims(BaseModel):
 
 class TokenValidationResult(BaseModel):
     """Result of token validation."""
+
     valid: bool
-    claims: Optional[TokenClaims] = None
-    error: Optional[str] = None
+    claims: TokenClaims | None = None
+    error: str | None = None
     expired: bool = False
-    scope: Optional[TokenScope] = None
+    scope: TokenScope | None = None
 
 
 class JWTAuthenticator:
@@ -114,8 +119,8 @@ class JWTAuthenticator:
         username: str,
         email: str,
         role: UserRole,
-        github_id: Optional[int] = None,
-        custom_expiration: Optional[timedelta] = None,
+        github_id: int | None = None,
+        custom_expiration: timedelta | None = None,
     ) -> str:
         """Generate access token for user authentication."""
         expiration = custom_expiration or timedelta(hours=self._access_token_expire_hours)
@@ -133,11 +138,7 @@ class JWTAuthenticator:
             automation_name=None,
         )
 
-        token = jwt.encode(
-            claims.model_dump_for_jwt(),
-            self._secret_key,
-            algorithm=self._algorithm
-        )
+        token = jwt.encode(claims.model_dump_for_jwt(), self._secret_key, algorithm=self._algorithm)
 
         logger.info(
             "Access token generated",
@@ -165,11 +166,7 @@ class JWTAuthenticator:
             automation_name=None,
         )
 
-        token = jwt.encode(
-            claims.model_dump_for_jwt(),
-            self._secret_key,
-            algorithm=self._algorithm
-        )
+        token = jwt.encode(claims.model_dump_for_jwt(), self._secret_key, algorithm=self._algorithm)
 
         logger.info(
             "Refresh token generated",
@@ -183,8 +180,8 @@ class JWTAuthenticator:
     def generate_automation_token(
         self,
         automation_name: str,
-        permissions: List[str],
-        custom_expiration: Optional[timedelta] = None,
+        permissions: list[str],
+        custom_expiration: timedelta | None = None,
     ) -> str:
         """Generate automation token for CI/CD systems."""
         expiration = custom_expiration or timedelta(days=self._automation_token_expire_days)
@@ -204,11 +201,7 @@ class JWTAuthenticator:
             github_id=None,
         )
 
-        token = jwt.encode(
-            claims.model_dump_for_jwt(),
-            self._secret_key,
-            algorithm=self._algorithm
-        )
+        token = jwt.encode(claims.model_dump_for_jwt(), self._secret_key, algorithm=self._algorithm)
 
         logger.info(
             "Automation token generated",
@@ -228,7 +221,7 @@ class JWTAuthenticator:
                 token,
                 self._secret_key,
                 algorithms=[self._algorithm],
-                options={"verify_exp": True, "verify_aud": False}
+                options={"verify_exp": True, "verify_aud": False},
             )
 
             # Parse claims
@@ -269,7 +262,7 @@ class JWTAuthenticator:
                 error=f"Token validation error: {str(e)}",
             )
 
-    def refresh_access_token(self, refresh_token: str) -> Optional[str]:
+    def refresh_access_token(self, refresh_token: str) -> str | None:
         """Generate new access token from refresh token."""
         validation_result = self.validate_token(refresh_token)
 
@@ -279,7 +272,9 @@ class JWTAuthenticator:
 
         claims = validation_result.claims
         if not claims or claims.token_type != TokenType.REFRESH:
-            logger.warning("Invalid token type for refresh", token_type=claims.token_type if claims else None)
+            logger.warning(
+                "Invalid token type for refresh", token_type=claims.token_type if claims else None
+            )
             return None
 
         # Extract user info from refresh token
@@ -302,13 +297,10 @@ class JWTAuthenticator:
         logger.info("Access token refreshed", user_id=user_id, username=username)
         return new_access_token
 
-    def decode_token_claims(self, token: str) -> Optional[TokenClaims]:
+    def decode_token_claims(self, token: str) -> TokenClaims | None:
         """Decode token without validation (for inspection)."""
         try:
-            payload = jwt.decode(
-                token,
-                options={"verify_signature": False, "verify_exp": False}
-            )
+            payload = jwt.decode(token, options={"verify_signature": False, "verify_exp": False})
             return TokenClaims(**payload)
         except Exception as e:
             logger.error("Failed to decode token claims", error=str(e))
@@ -322,7 +314,7 @@ class JWTAuthenticator:
 
         return datetime.utcnow() > claims.exp
 
-    def get_token_expiry(self, token: str) -> Optional[datetime]:
+    def get_token_expiry(self, token: str) -> datetime | None:
         """Get token expiration time."""
         claims = self.decode_token_claims(token)
         return claims.exp if claims else None
@@ -365,8 +357,8 @@ class TokenManager:
         username: str,
         email: str,
         role: UserRole,
-        github_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        github_id: int | None = None,
+    ) -> dict[str, Any]:
         """Create access and refresh token pair for user."""
         access_token = self.jwt_auth.generate_access_token(
             user_id=user_id,
@@ -391,9 +383,9 @@ class TokenManager:
     async def create_automation_token(
         self,
         automation_name: str,
-        permissions: List[str],
-        expiration_days: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        permissions: list[str],
+        expiration_days: int | None = None,
+    ) -> dict[str, Any]:
         """Create automation token for CI/CD systems."""
         custom_expiration = None
         if expiration_days:
@@ -414,7 +406,7 @@ class TokenManager:
             "permissions": permissions,
         }
 
-    async def validate_and_refresh_token(self, token: str) -> Optional[Dict[str, Any]]:
+    async def validate_and_refresh_token(self, token: str) -> dict[str, Any] | None:
         """Validate token and auto-refresh if needed."""
         validation_result = self.jwt_auth.validate_token(token)
 
@@ -448,7 +440,7 @@ class TokenManager:
             "needs_refresh": False,
         }
 
-    async def refresh_user_token(self, refresh_token: str) -> Optional[Dict[str, Any]]:
+    async def refresh_user_token(self, refresh_token: str) -> dict[str, Any] | None:
         """Refresh user access token."""
         new_access_token = self.jwt_auth.refresh_access_token(refresh_token)
 
@@ -463,7 +455,7 @@ class TokenManager:
 
 
 # Global token manager instance
-_token_manager: Optional[TokenManager] = None
+_token_manager: TokenManager | None = None
 
 
 async def get_token_manager() -> TokenManager:

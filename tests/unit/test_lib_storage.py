@@ -708,7 +708,7 @@ class TestFileDownloadOperations:
         client = StorageClient()
 
         with pytest.raises(ValueError, match="Range start cannot be greater than range end"):
-            async for chunk in client.download_file_stream(
+            async for _chunk in client.download_file_stream(
                 "videos/test.mp4", range_start=1000, range_end=100
             ):
                 pass
@@ -731,7 +731,7 @@ class TestFileDownloadOperations:
         client._session = mock_session
 
         with pytest.raises(ValueError, match="Invalid range request"):
-            async for chunk in client.download_file_stream(
+            async for _chunk in client.download_file_stream(
                 "videos/test.mp4", range_start=50, range_end=100
             ):
                 pass

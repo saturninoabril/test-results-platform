@@ -10,6 +10,8 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 # Add the project root to the path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -59,6 +61,7 @@ class FileGenerator:
         return io.BytesIO(fake_png)
 
 
+@pytest.mark.asyncio
 async def test_storage_client_initialization():
     """Test storage client initialization and configuration."""
     print("🔧 Testing storage client initialization...")
@@ -76,6 +79,7 @@ async def test_storage_client_initialization():
     print("✅ Storage client initialization successful")
 
 
+@pytest.mark.asyncio
 async def test_basic_file_operations():
     """Test basic file upload and download operations."""
     print("📁 Testing basic file operations...")
@@ -121,6 +125,7 @@ async def test_basic_file_operations():
     return storage_key
 
 
+@pytest.mark.asyncio
 async def test_multipart_upload():
     """Test multipart upload for large files."""
     print("📦 Testing multipart upload...")
@@ -162,6 +167,7 @@ async def test_multipart_upload():
     return storage_key
 
 
+@pytest.mark.asyncio
 async def test_streaming_download():
     """Test streaming download for large files."""
     print("🌊 Testing streaming download...")
@@ -197,6 +203,7 @@ async def test_streaming_download():
     return storage_key
 
 
+@pytest.mark.asyncio
 async def test_signed_urls():
     """Test signed URL generation for secure access."""
     print("🔗 Testing signed URL generation...")
@@ -228,6 +235,7 @@ async def test_signed_urls():
     return storage_key, signed_url
 
 
+@pytest.mark.asyncio
 async def test_file_listing():
     """Test file listing and prefix-based filtering."""
     print("📋 Testing file listing...")
@@ -261,6 +269,7 @@ async def test_file_listing():
     return [storage_key for storage_key, _ in test_files]
 
 
+@pytest.mark.asyncio
 async def test_bulk_operations():
     """Test bulk file operations for performance."""
     print("⚡ Testing bulk operations...")
@@ -305,6 +314,7 @@ async def test_bulk_operations():
     return uploaded_files
 
 
+@pytest.mark.asyncio
 async def test_cleanup_operations():
     """Test file cleanup and retention policies."""
     print("🧹 Testing cleanup operations...")
@@ -362,6 +372,7 @@ async def test_cleanup_operations():
     return cleanup_files
 
 
+@pytest.mark.asyncio
 async def test_error_handling():
     """Test error handling for various failure scenarios."""
     print("❌ Testing error handling...")
@@ -371,7 +382,7 @@ async def test_error_handling():
     # Test downloading non-existent file
     try:
         await client.download_file("test-artifacts/nonexistent/missing-file.txt")
-        assert False, "Should have raised an exception for missing file"
+        raise AssertionError("Should have raised an exception for missing file")
     except Exception as e:
         print(f"✅ Correctly handled missing file download: {type(e).__name__}")
 
@@ -390,11 +401,12 @@ async def test_error_handling():
         await client.upload_file(
             file_obj=test_file, storage_key=invalid_key, content_type="text/plain"
         )
-        assert False, "Should have raised an exception for invalid storage key"
+        raise AssertionError("Should have raised an exception for invalid storage key")
     except Exception as e:
         print(f"✅ Correctly handled invalid storage key: {type(e).__name__}")
 
 
+@pytest.mark.asyncio
 async def test_file_types_and_content_types():
     """Test various file types and content type handling."""
     print("📄 Testing various file types...")
@@ -418,7 +430,7 @@ async def test_file_types_and_content_types():
         else:
             file_obj = FileGenerator.generate_small_file(content)
 
-        result = await client.upload_file(
+        await client.upload_file(
             file_obj=file_obj,
             storage_key=storage_key,
             content_type=content_type,
@@ -429,8 +441,8 @@ async def test_file_types_and_content_types():
         print(f"✅ Uploaded {content_type}: {storage_key}")
 
     # Verify metadata and content types
-    for storage_key, expected_content_type, original_content in uploaded_files:
-        metadata = await client.get_file_metadata(storage_key)
+    for storage_key, _expected_content_type, original_content in uploaded_files:
+        await client.get_file_metadata(storage_key)
 
         # Note: Content type verification might vary by storage implementation
         print(f"✅ File metadata retrieved for {storage_key}")
@@ -455,15 +467,15 @@ async def run_all_tests():
         print()
 
         # Test 2: Basic file operations
-        basic_file = await test_basic_file_operations()
+        await test_basic_file_operations()
         print()
 
         # Test 3: Multipart upload for large files
-        large_file = await test_multipart_upload()
+        await test_multipart_upload()
         print()
 
         # Test 4: Streaming download
-        stream_file = await test_streaming_download()
+        await test_streaming_download()
         print()
 
         # Test 5: Signed URLs
@@ -487,7 +499,7 @@ async def run_all_tests():
         print()
 
         # Test 10: Cleanup operations (run last)
-        cleanup_files = await test_cleanup_operations()
+        await test_cleanup_operations()
         print()
 
         print("=" * 60)

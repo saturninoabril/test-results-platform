@@ -3,9 +3,11 @@ Database connection and session management using SQLAlchemy async.
 Provides connection pooling, health checks, and session lifecycle management.
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Optional
 
+import structlog
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -13,9 +15,6 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import declarative_base
-from sqlalchemy.pool import NullPool, QueuePool
-from sqlalchemy import text
-import structlog
 
 from .config import get_settings
 
@@ -25,22 +24,17 @@ logger = structlog.get_logger()
 Base = declarative_base()
 
 # Global engine instance
-_engine: Optional[AsyncEngine] = None
-_session_maker: Optional[async_sessionmaker[AsyncSession]] = None
+_engine: AsyncEngine | None = None
+_session_maker: async_sessionmaker[AsyncSession] | None = None
 
 
-def create_engine(database_url: Optional[str] = None) -> AsyncEngine:
+def create_engine(database_url: str | None = None) -> AsyncEngine:
     """Create async SQLAlchemy engine with proper configuration."""
     settings = get_settings()
     url = database_url or settings.database.url
 
     # Configure connection pool based on environment
-    if settings.is_development():
-        # Development: echo SQL, async pool
-        echo = settings.database.echo
-    else:
-        # Production: no echo
-        echo = False
+    echo = settings.database.echo if settings.is_development() else False
 
     engine = create_async_engine(
         url,
@@ -72,7 +66,7 @@ def create_session_maker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession
     )
 
 
-async def init_database(database_url: Optional[str] = None) -> None:
+async def init_database(database_url: str | None = None) -> None:
     """Initialize database connection and session maker."""
     global _engine, _session_maker
 
@@ -112,7 +106,7 @@ def get_session_maker() -> async_sessionmaker[AsyncSession]:
 
 
 @asynccontextmanager
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     """Get database session with automatic cleanup."""
     session_maker = get_session_maker()
     async with session_maker() as session:

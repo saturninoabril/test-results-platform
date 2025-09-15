@@ -6,9 +6,9 @@ import logging
 import os
 import secrets
 from functools import lru_cache
-from typing import Any, Literal
+from typing import Literal
 
-from pydantic import Field, PostgresDsn, field_validator, ValidationInfo
+from pydantic import Field, PostgresDsn, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,9 @@ class AuthSettings(BaseSettings):
     jwt_secret_key: str = Field(description="JWT secret key")
     jwt_algorithm: str = Field(default="HS256", description="JWT algorithm")
     jwt_expiration_hours: int = Field(default=24, description="JWT expiration in hours")
-    automation_token_max_age_days: int = Field(default=365, description="Automation token max age in days")
+    automation_token_max_age_days: int = Field(
+        default=365, description="Automation token max age in days"
+    )
 
     # GitHub OAuth
     github_client_id: str | None = Field(default=None, description="GitHub OAuth client ID")
@@ -191,9 +193,7 @@ class Settings(BaseSettings):
     )
 
     # Environment
-    environment: Literal["development", "staging", "production"] = Field(
-        default="development"
-    )
+    environment: Literal["development", "staging", "production"] = Field(default="development")
     debug: bool = Field(default=False)
 
     # API configuration

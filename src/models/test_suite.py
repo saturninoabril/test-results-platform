@@ -10,8 +10,8 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .test_framework import TestFramework
     from .test_environment import TestEnvironment
+    from .test_framework import TestFramework
     from .test_result import TestResult
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String
@@ -100,11 +100,11 @@ class TestSuite(BaseModel):
     )
 
     # Relationships
-    framework: Mapped["TestFramework"] = relationship("TestFramework", lazy="select")
+    framework: Mapped[TestFramework] = relationship("TestFramework", lazy="select")
 
-    environment: Mapped["TestEnvironment"] = relationship("TestEnvironment", lazy="select")
+    environment: Mapped[TestEnvironment] = relationship("TestEnvironment", lazy="select")
 
-    test_results: Mapped[list["TestResult"]] = relationship(
+    test_results: Mapped[list[TestResult]] = relationship(
         "TestResult", back_populates="suite", cascade="all, delete-orphan", lazy="select"
     )
 
@@ -181,8 +181,8 @@ class TestSuite(BaseModel):
             raise ValueError("Total tests must equal sum of passed, failed, and skipped tests")
 
         # Check timing consistency
-        if self.completed_at <= self.started_at:
-            raise ValueError("Completion time must be after start time")
+        if self.completed_at < self.started_at:
+            raise ValueError("Completion time cannot be before start time")
 
     @property
     def success_rate(self) -> float:

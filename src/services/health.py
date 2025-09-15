@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 import psutil  # type: ignore[import-untyped]
 
@@ -36,7 +36,7 @@ class HealthCheck:
     status: HealthStatus
     response_time_ms: float
     message: str
-    details: Optional[dict[str, Any]] = None
+    details: dict[str, Any] | None = None
 
 
 @dataclass
@@ -47,7 +47,7 @@ class SystemHealth:
     timestamp: datetime
     response_time_ms: float
     checks: list[HealthCheck]
-    summary: Optional[dict[str, Any]] = None
+    summary: dict[str, Any] | None = None
 
 
 class HealthCheckManager:
@@ -329,14 +329,25 @@ class HealthCheckManager:
             }
 
             # Try basic operations
-            try:
-                import aioboto3
-                import fastapi
-                import prometheus_client  # type: ignore[import-not-found]
-                import sqlalchemy
-                import structlog
-            except ImportError as e:
-                dependencies_status["import_error"] = str(e)
+            import importlib.util
+
+            required_packages = [
+                "aioboto3",
+                "fastapi",
+                "prometheus_client",
+                "sqlalchemy",
+                "structlog",
+            ]
+            missing_packages = []
+
+            for package in required_packages:
+                if importlib.util.find_spec(package) is None:
+                    missing_packages.append(package)
+
+            if missing_packages:
+                dependencies_status["import_error"] = (
+                    f"Missing packages: {', '.join(missing_packages)}"
+                )
 
             response_time = (time.time() - start_time) * 1000
 
@@ -469,7 +480,7 @@ class HealthCheckManager:
             db_manager = get_database_manager()
             health_data = await db_manager.health_check()
             return bool(health_data.get("healthy", False))
-        except:
+        except Exception:
             return False
 
     async def get_liveness_check(self) -> bool:
@@ -477,7 +488,7 @@ class HealthCheckManager:
         try:
             # Very basic check - can we respond?
             return True
-        except:
+        except Exception:
             return False
 
 

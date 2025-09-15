@@ -82,7 +82,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-# asyncio_mode = "auto"
+asyncio_mode = "auto"
 addopts = [
     "--strict-markers",
     "--strict-config",
@@ -107,6 +107,8 @@ filterwarnings = [
 [tool.ruff]
 target-version = "py313"
 line-length = 100
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -124,10 +126,7 @@ ignore = [
     "B008",  # do not perform function calls in argument defaults
     "C901",  # too complex
 ]
-
-[tool.ruff.per-file-ignores]
-"tests/*" = ["ARG", "S101", "S603", "S607"]
-"src/cli/*" = ["B008"]  # Click uses function calls in defaults
+per-file-ignores = {"tests/*" = ["ARG", "S101", "S603", "S607", "E402"], "src/cli/*" = ["B008"], "src/models/*" = ["ARG002", "TCH003"], "src/services/database_performance.py" = ["ARG001"], "src/main.py" = ["ARG001"], "scripts/*" = ["E402"]}
 
 [tool.mypy]
 python_version = "3.13"

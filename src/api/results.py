@@ -61,8 +61,12 @@ async def create_result(request: ResultCreateRequest) -> ResultResponse:
                     if test_result_model:
                         # Get related suite and framework/environment info
                         suite_response = await SuiteService.get_suite(result.suite_id)
-                        framework_response = await FrameworkService.get_framework(suite_response.framework_id)
-                        environment_response = await EnvironmentService.get_environment(suite_response.environment_id)
+                        framework_response = await FrameworkService.get_framework(
+                            suite_response.framework_id
+                        )
+                        environment_response = await EnvironmentService.get_environment(
+                            suite_response.environment_id
+                        )
 
                         # Get the actual TestSuite model
                         test_suite_model = await session.get(TestSuite, result.suite_id)
@@ -81,14 +85,14 @@ async def create_result(request: ResultCreateRequest) -> ResultResponse:
 
     except ResultValidationError as e:
         logger.warning("Result creation validation error", error=str(e))
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Result creation failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while creating result",
-        )
+        ) from e
 
 
 @router.post(
@@ -126,8 +130,12 @@ async def create_results_bulk(requests: list[ResultCreateRequest]) -> list[Resul
                 async with get_session() as session:
                     for suite_id, suite_failed_results in suite_failures.items():
                         suite_response = await SuiteService.get_suite(suite_id)
-                        framework_response = await FrameworkService.get_framework(suite_response.framework_id)
-                        environment_response = await EnvironmentService.get_environment(suite_response.environment_id)
+                        framework_response = await FrameworkService.get_framework(
+                            suite_response.framework_id
+                        )
+                        environment_response = await EnvironmentService.get_environment(
+                            suite_response.environment_id
+                        )
 
                         # Get actual database models
                         test_suite_model = await session.get(TestSuite, suite_id)
@@ -137,7 +145,9 @@ async def create_results_bulk(requests: list[ResultCreateRequest]) -> list[Resul
                                 # Convert to TestResult models for bulk analysis
                                 test_result_models = []
                                 for result_response in suite_failed_results:
-                                    test_result_model = await session.get(TestResult, result_response.id)
+                                    test_result_model = await session.get(
+                                        TestResult, result_response.id
+                                    )
                                     if test_result_model:
                                         test_result_models.append(test_result_model)
 
@@ -150,7 +160,9 @@ async def create_results_bulk(requests: list[ResultCreateRequest]) -> list[Resul
                                     )
                             else:
                                 # Single failure notification
-                                test_result_model = await session.get(TestResult, suite_failed_results[0].id)
+                                test_result_model = await session.get(
+                                    TestResult, suite_failed_results[0].id
+                                )
                                 if test_result_model:
                                     await notification_service.notify_test_failure(
                                         test_result=test_result_model,
@@ -167,14 +179,14 @@ async def create_results_bulk(requests: list[ResultCreateRequest]) -> list[Resul
 
     except ResultValidationError as e:
         logger.warning("Bulk result creation validation error", error=str(e))
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Bulk result creation failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while creating bulk results",
-        )
+        ) from e
 
 
 @router.get(
@@ -222,7 +234,7 @@ async def get_results(
         raise HTTPException(
             status_code=500,  # HTTP_500_INTERNAL_SERVER_ERROR
             detail="Internal server error occurred while retrieving results",
-        )
+        ) from e
 
 
 @router.get(
@@ -241,14 +253,14 @@ async def get_result(result_id: UUID) -> ResultResponse:
 
     except ResultNotFoundError as e:
         logger.warning("Result not found via API", result_id=str(result_id))
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Result retrieval failed", result_id=str(result_id), error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving result",
-        )
+        ) from e
 
 
 @router.put(
@@ -272,18 +284,18 @@ async def update_result(result_id: UUID, request: ResultUpdateRequest) -> Result
 
     except ResultNotFoundError as e:
         logger.warning("Result not found for update via API", result_id=str(result_id))
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except ResultValidationError as e:
         logger.warning("Result update validation error", result_id=str(result_id), error=str(e))
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Result update failed", result_id=str(result_id), error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while updating result",
-        )
+        ) from e
 
 
 @router.delete(
@@ -302,11 +314,11 @@ async def delete_result(result_id: UUID) -> Response:
 
     except ResultNotFoundError as e:
         logger.warning("Result not found for deletion via API", result_id=str(result_id))
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Result deletion failed", result_id=str(result_id), error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while deleting result",
-        )
+        ) from e

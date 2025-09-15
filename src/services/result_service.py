@@ -91,7 +91,7 @@ class ResultService:
             except IntegrityError as e:
                 await session.rollback()
                 logger.error("Result creation failed", error=str(e))
-                raise ResultValidationError(f"Result creation failed: {str(e)}")
+                raise ResultValidationError(f"Result creation failed: {str(e)}") from e
 
     @staticmethod
     async def create_results_bulk(requests: list[ResultCreateRequest]) -> list[ResultResponse]:
@@ -138,7 +138,7 @@ class ResultService:
             except IntegrityError as e:
                 await session.rollback()
                 logger.error("Bulk result creation failed", error=str(e))
-                raise ResultValidationError(f"Bulk result creation failed: {str(e)}")
+                raise ResultValidationError(f"Bulk result creation failed: {str(e)}") from e
 
     @staticmethod
     async def get_results() -> list[ResultResponse]:
@@ -208,7 +208,7 @@ class ResultService:
             except IntegrityError as e:
                 await session.rollback()
                 logger.error("Result update failed", error=str(e))
-                raise ResultValidationError(f"Result update failed: {str(e)}")
+                raise ResultValidationError(f"Result update failed: {str(e)}") from e
 
     @staticmethod
     async def delete_result(result_id: UUID) -> None:

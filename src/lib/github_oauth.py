@@ -4,8 +4,6 @@ Handles OAuth flow, user profile extraction, and role mapping with permission sy
 """
 
 import secrets
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlencode
 
 import httpx
@@ -20,15 +18,16 @@ logger = structlog.get_logger()
 
 class GitHubUserProfile(BaseModel):
     """GitHub user profile information."""
+
     id: int = Field(..., description="GitHub user ID")
     login: str = Field(..., description="GitHub username")
-    email: Optional[str] = Field(None, description="Primary email address")
-    name: Optional[str] = Field(None, description="Full name")
+    email: str | None = Field(None, description="Primary email address")
+    name: str | None = Field(None, description="Full name")
     avatar_url: str = Field(..., description="Avatar URL")
-    company: Optional[str] = Field(None, description="Company")
-    blog: Optional[str] = Field(None, description="Blog/website URL")
-    location: Optional[str] = Field(None, description="Location")
-    bio: Optional[str] = Field(None, description="Biography")
+    company: str | None = Field(None, description="Company")
+    blog: str | None = Field(None, description="Blog/website URL")
+    location: str | None = Field(None, description="Location")
+    bio: str | None = Field(None, description="Biography")
     public_repos: int = Field(..., description="Number of public repositories")
     followers: int = Field(..., description="Number of followers")
     following: int = Field(..., description="Number of following")
@@ -38,21 +37,23 @@ class GitHubUserProfile(BaseModel):
 
 class GitHubOrganization(BaseModel):
     """GitHub organization information."""
+
     id: int = Field(..., description="Organization ID")
     login: str = Field(..., description="Organization name")
-    description: Optional[str] = Field(None, description="Organization description")
+    description: str | None = Field(None, description="Organization description")
     avatar_url: str = Field(..., description="Organization avatar URL")
 
 
 class GitHubOAuthResult(BaseModel):
     """Result of GitHub OAuth authentication."""
+
     success: bool
-    user_profile: Optional[GitHubUserProfile] = None
-    user_role: Optional[UserRole] = None
-    access_token: Optional[str] = None
-    refresh_token: Optional[str] = None
-    error: Optional[str] = None
-    organizations: List[GitHubOrganization] = Field(default_factory=list)
+    user_profile: GitHubUserProfile | None = None
+    user_role: UserRole | None = None
+    access_token: str | None = None
+    refresh_token: str | None = None
+    error: str | None = None
+    organizations: list[GitHubOrganization] = Field(default_factory=list)
 
 
 class RoleMapper:
@@ -61,10 +62,10 @@ class RoleMapper:
     def __init__(self) -> None:
         """Initialize role mapper with default rules."""
         # In a real application, these would be configurable via database/config
-        self._admin_users: Set[str] = set()  # GitHub usernames
-        self._admin_organizations: Set[str] = set()  # GitHub org names
-        self._readonly_users: Set[str] = set()
-        self._user_email_domains: Set[str] = set()  # Email domains for user role
+        self._admin_users: set[str] = set()  # GitHub usernames
+        self._admin_organizations: set[str] = set()  # GitHub org names
+        self._readonly_users: set[str] = set()
+        self._user_email_domains: set[str] = set()  # Email domains for user role
 
         # Load default configuration
         self._load_default_config()
@@ -93,7 +94,7 @@ class RoleMapper:
     def determine_role(
         self,
         profile: GitHubUserProfile,
-        organizations: List[GitHubOrganization],
+        organizations: list[GitHubOrganization],
     ) -> UserRole:
         """Determine user role based on profile and organization membership."""
 
@@ -119,7 +120,7 @@ class RoleMapper:
 
         # Check email domain for user role
         if profile.email:
-            email_domain = profile.email.split('@')[-1]
+            email_domain = profile.email.split("@")[-1]
             if email_domain in self._user_email_domains:
                 logger.info("User granted user role by email domain", email=profile.email)
                 return UserRole.USER
@@ -143,24 +144,43 @@ class RoleMapper:
         self._admin_organizations.add(org_name)
         logger.info("Added admin organization", organization=org_name)
 
-    def get_role_permissions(self, role: UserRole) -> List[str]:
+    def get_role_permissions(self, role: UserRole) -> list[str]:
         """Get permissions for a given role."""
         role_permissions = {
             UserRole.ADMIN: [
-                "results:read", "results:write", "results:delete",
-                "suites:read", "suites:write", "suites:delete",
-                "artifacts:read", "artifacts:write", "artifacts:delete",
-                "frameworks:read", "frameworks:write", "frameworks:delete",
-                "environments:read", "environments:write", "environments:delete",
-                "users:read", "users:write", "users:delete",
-                "automation:read", "automation:write", "automation:delete",
+                "results:read",
+                "results:write",
+                "results:delete",
+                "suites:read",
+                "suites:write",
+                "suites:delete",
+                "artifacts:read",
+                "artifacts:write",
+                "artifacts:delete",
+                "frameworks:read",
+                "frameworks:write",
+                "frameworks:delete",
+                "environments:read",
+                "environments:write",
+                "environments:delete",
+                "users:read",
+                "users:write",
+                "users:delete",
+                "automation:read",
+                "automation:write",
+                "automation:delete",
             ],
             UserRole.USER: [
-                "results:read", "results:write",
-                "suites:read", "suites:write",
-                "artifacts:read", "artifacts:write",
-                "frameworks:read", "frameworks:write",
-                "environments:read", "environments:write",
+                "results:read",
+                "results:write",
+                "suites:read",
+                "suites:write",
+                "artifacts:read",
+                "artifacts:write",
+                "frameworks:read",
+                "frameworks:write",
+                "environments:read",
+                "environments:write",
             ],
             UserRole.READONLY: [
                 "results:read",
@@ -191,7 +211,7 @@ class GitHubOAuthClient:
         # OAuth scopes needed
         self.scopes = ["user:email", "read:org"]
 
-    def get_authorization_url(self, state: Optional[str] = None) -> Dict[str, str]:
+    def get_authorization_url(self, state: str | None = None) -> dict[str, str]:
         """Generate GitHub OAuth authorization URL."""
         if not self.settings.auth.github_client_id:
             raise ValueError("GitHub OAuth client ID not configured")
@@ -221,7 +241,7 @@ class GitHubOAuthClient:
             "state": state,
         }
 
-    async def exchange_code_for_token(self, code: str, state: str) -> Optional[str]:
+    async def exchange_code_for_token(self, code: str, state: str) -> str | None:
         """Exchange authorization code for access token."""
         if not self.settings.auth.github_client_id or not self.settings.auth.github_client_secret:
             raise ValueError("GitHub OAuth credentials not configured")
@@ -270,7 +290,7 @@ class GitHubOAuthClient:
                 logger.error("GitHub OAuth token exchange error", error=str(e))
                 return None
 
-    async def get_user_profile(self, access_token: str) -> Optional[GitHubUserProfile]:
+    async def get_user_profile(self, access_token: str) -> GitHubUserProfile | None:
         """Get user profile from GitHub API."""
         headers = {
             "Authorization": f"Bearer {access_token}",
@@ -301,14 +321,15 @@ class GitHubOAuthClient:
                     if email_response.is_success:
                         emails = email_response.json()
                         primary_email = next(
-                            (email["email"] for email in emails if email["primary"]),
-                            None
+                            (email["email"] for email in emails if email["primary"]), None
                         )
                         if primary_email:
                             user_data["email"] = primary_email
 
                 profile = GitHubUserProfile(**user_data)
-                logger.info("Retrieved GitHub user profile", username=profile.login, user_id=profile.id)
+                logger.info(
+                    "Retrieved GitHub user profile", username=profile.login, user_id=profile.id
+                )
                 return profile
 
             except httpx.HTTPError as e:
@@ -318,7 +339,7 @@ class GitHubOAuthClient:
                 logger.error("GitHub API user profile error", error=str(e))
                 return None
 
-    async def get_user_organizations(self, access_token: str) -> List[GitHubOrganization]:
+    async def get_user_organizations(self, access_token: str) -> list[GitHubOrganization]:
         """Get user's organization memberships."""
         headers = {
             "Authorization": f"Bearer {access_token}",
@@ -359,16 +380,14 @@ class GitHubOAuthClient:
             github_token = await self.exchange_code_for_token(code, state)
             if not github_token:
                 return GitHubOAuthResult(
-                    success=False,
-                    error="Failed to exchange authorization code for access token"
+                    success=False, error="Failed to exchange authorization code for access token"
                 )
 
             # Get user profile
             profile = await self.get_user_profile(github_token)
             if not profile:
                 return GitHubOAuthResult(
-                    success=False,
-                    error="Failed to retrieve user profile from GitHub"
+                    success=False, error="Failed to retrieve user profile from GitHub"
                 )
 
             # Get user organizations
@@ -406,16 +425,13 @@ class GitHubOAuthClient:
 
         except Exception as e:
             logger.error("GitHub OAuth authentication error", error=str(e))
-            return GitHubOAuthResult(
-                success=False,
-                error=f"Authentication error: {str(e)}"
-            )
+            return GitHubOAuthResult(success=False, error=f"Authentication error: {str(e)}")
 
-    def get_user_permissions(self, role: UserRole) -> List[str]:
+    def get_user_permissions(self, role: UserRole) -> list[str]:
         """Get user permissions based on role."""
         return self.role_mapper.get_role_permissions(role)
 
-    async def refresh_github_token(self, refresh_token: str) -> Optional[Dict[str, str]]:
+    async def refresh_github_token(self, _refresh_token: str) -> dict[str, str] | None:
         """Refresh GitHub access token (if supported by GitHub in the future)."""
         # GitHub currently doesn't support refresh tokens for OAuth apps
         # This is a placeholder for future implementation
@@ -424,7 +440,7 @@ class GitHubOAuthClient:
 
 
 # Global OAuth client instance
-_github_oauth_client: Optional[GitHubOAuthClient] = None
+_github_oauth_client: GitHubOAuthClient | None = None
 
 
 async def get_github_oauth_client() -> GitHubOAuthClient:

@@ -7,11 +7,9 @@ Provides commands for data import, export, management, and validation.
 import asyncio
 import csv
 import json
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any
 
 import click
 import structlog
@@ -20,9 +18,9 @@ from rich.console import Console
 from rich.progress import Progress
 from rich.prompt import Confirm
 from rich.table import Table
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Import from the parent services
-
 from ..lib.config import get_settings
 from ..lib.database import get_session
 from ..models.test_artifact import TestArtifact
@@ -98,7 +96,9 @@ class TestResultsManager:
             else:
                 raise ValueError(f"Unsupported JSON format: {format_type}")
 
-    async def _import_playwright_data(self, session: AsyncSession, data: dict[str, Any]) -> dict[str, Any]:
+    async def _import_playwright_data(
+        self, session: AsyncSession, data: dict[str, Any]
+    ) -> dict[str, Any]:
         """Import Playwright test results."""
         stats = {"frameworks": 0, "environments": 0, "suites": 0, "results": 0}
 
@@ -200,7 +200,9 @@ class TestResultsManager:
 
         return stats
 
-    async def _import_cypress_data(self, session: AsyncSession, data: dict[str, Any]) -> dict[str, Any]:
+    async def _import_cypress_data(
+        self, session: AsyncSession, data: dict[str, Any]
+    ) -> dict[str, Any]:
         """Import Cypress test results."""
         stats = {"frameworks": 0, "environments": 0, "suites": 0, "results": 0}
 
@@ -276,7 +278,9 @@ class TestResultsManager:
         await session.commit()
         return stats
 
-    async def _import_generic_json_data(self, session: AsyncSession, data: list[Any] | dict[str, Any]) -> dict[str, Any]:
+    async def _import_generic_json_data(
+        self, session: AsyncSession, data: list[Any] | dict[str, Any]
+    ) -> dict[str, Any]:
         """Import generic JSON test data."""
         stats = {"frameworks": 0, "environments": 0, "suites": 0, "results": 0}
 
@@ -393,7 +397,6 @@ class TestResultsManager:
 
             # Group results by suite (if suite column exists)
             suites: dict[str, list[dict[str, Any]]] = {}
-            results_data: list[dict[str, Any]] = []
 
             for row in reader:
                 suite_name = row.get("suite", row.get("suite_name", "Default Suite"))
@@ -611,7 +614,7 @@ class TestResultsManager:
         }
 
     async def _export_csv_data(
-        self, session: AsyncSession, output_path: Path, filters: dict[str, Any] | None
+        self, session: AsyncSession, output_path: Path, _filters: dict[str, Any] | None
     ) -> dict[str, Any]:
         """Export data in CSV format."""
         from sqlalchemy import select
@@ -834,7 +837,9 @@ def import_data(ctx: Any, file_path: Path, format: str, validate: bool) -> None:
 )
 @click.option("--framework", help="Filter by framework name")
 @click.option("--environment", help="Filter by environment name")
-def export_data(output_path: Path, format: str, framework: Optional[str], environment: Optional[str]) -> None:
+def export_data(
+    output_path: Path, format: str, framework: str | None, environment: str | None
+) -> None:
     """Export test data in various formats.
 
     Examples:

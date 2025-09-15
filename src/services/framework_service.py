@@ -87,7 +87,7 @@ class FrameworkService:
                 logger.error("Framework creation failed", error=str(e))
                 raise FrameworkAlreadyExistsError(
                     f"Framework '{request.name}' version '{request.version}' already exists"
-                )
+                ) from e
 
     @staticmethod
     async def get_frameworks() -> list[FrameworkResponse]:
@@ -168,7 +168,7 @@ class FrameworkService:
                 logger.error("Framework update failed", error=str(e))
                 raise FrameworkAlreadyExistsError(
                     f"Framework '{request.name}' version '{request.version}' already exists"
-                )
+                ) from e
 
     @staticmethod
     async def delete_framework(framework_id: UUID) -> None:

@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
 
 from ..lib.middleware import RequireSuitesDelete, RequireSuitesRead, RequireSuitesWrite
+
 # Note: Services imported but notification logic is commented out in update_suite
 # from ..services.environment_service import EnvironmentService
 # from ..services.framework_service import FrameworkService
@@ -51,14 +52,14 @@ async def create_suite(request: SuiteCreateRequest) -> SuiteResponse:
 
     except SuiteValidationError as e:
         logger.warning("Suite creation validation error", error=str(e))
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Suite creation failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while creating suite",
-        )
+        ) from e
 
 
 @router.get(
@@ -108,7 +109,7 @@ async def get_suites(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving suites",
-        )
+        ) from e
 
 
 @router.get(
@@ -139,7 +140,7 @@ async def get_suite_statistics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving statistics",
-        )
+        ) from e
 
 
 @router.get(
@@ -158,14 +159,14 @@ async def get_suite(suite_id: UUID) -> SuiteResponse:
 
     except SuiteNotFoundError as e:
         logger.warning("Suite not found via API", suite_id=str(suite_id))
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Suite retrieval failed", suite_id=str(suite_id), error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving suite",
-        )
+        ) from e
 
 
 @router.put(
@@ -230,18 +231,18 @@ async def update_suite(suite_id: UUID, request: SuiteUpdateRequest) -> SuiteResp
 
     except SuiteNotFoundError as e:
         logger.warning("Suite not found for update via API", suite_id=str(suite_id))
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except SuiteValidationError as e:
         logger.warning("Suite update validation error", suite_id=str(suite_id), error=str(e))
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Suite update failed", suite_id=str(suite_id), error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while updating suite",
-        )
+        ) from e
 
 
 @router.delete(
@@ -260,11 +261,11 @@ async def delete_suite(suite_id: UUID) -> Response:
 
     except SuiteNotFoundError as e:
         logger.warning("Suite not found for deletion via API", suite_id=str(suite_id))
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except Exception as e:
         logger.error("Suite deletion failed", suite_id=str(suite_id), error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while deleting suite",
-        )
+        ) from e
