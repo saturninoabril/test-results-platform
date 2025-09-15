@@ -113,7 +113,7 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_DB: test_results
+          POSTGRES_DB: test_results_integration
           POSTGRES_USER: test_results_user
           POSTGRES_PASSWORD: test_results_password
           POSTGRES_HOST_AUTH_METHOD: trust
@@ -138,6 +138,7 @@ jobs:
         ports:
           - 9000:9000
           - 9001:9001
+        cmd: ["server", "/data", "--console-address", ":9001"]
 
     steps:
     - name: Checkout code
@@ -175,14 +176,14 @@ jobs:
         echo "🗄️ Running database migrations..."
         uv run alembic upgrade head
       env:
-        DATABASE_URL: postgresql+asyncpg://test_results_user:test_results_password@localhost:5433/test_results
+        DATABASE_URL: postgresql+asyncpg://test_results_user:test_results_password@localhost:5433/test_results_integration
 
     - name: Run integration tests
       run: |
         echo "🧪 Running integration tests..."
         uv run python -m pytest tests/integration/ -v --tb=short --cov=src --cov-report=xml --cov-report=term
       env:
-        DATABASE_URL: postgresql+asyncpg://test_results_user:test_results_password@localhost:5433/test_results
+        DATABASE_URL: postgresql+asyncpg://test_results_user:test_results_password@localhost:5433/test_results_integration
         STORAGE_TYPE: minio
         MINIO_ENDPOINT: http://localhost:9000
         MINIO_ACCESS_KEY: minioadmin
@@ -206,7 +207,7 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_DB: test_results
+          POSTGRES_DB: test_results_contract
           POSTGRES_USER: test_results_user
           POSTGRES_PASSWORD: test_results_password
           POSTGRES_HOST_AUTH_METHOD: trust
@@ -216,7 +217,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 5433:5432
+          - 5434:5432
 
       minio:
         image: minio/minio:RELEASE.2025-09-07T16-13-09Z
@@ -229,8 +230,9 @@ jobs:
           --health-timeout 10s
           --health-retries 5
         ports:
-          - 9000:9000
-          - 9001:9001
+          - 9002:9000
+          - 9003:9001
+        cmd: ["server", "/data", "--console-address", ":9001"]
 
     steps:
     - name: Checkout code
@@ -259,7 +261,7 @@ jobs:
 
         # Wait for MinIO to be ready and create buckets
         sleep 10
-        mc alias set myminio http://localhost:9000 minioadmin minioadmin123
+        mc alias set myminio http://localhost:9002 minioadmin minioadmin123
         mc mb myminio/test-artifacts || true
         mc policy set public myminio/test-artifacts || true
 
@@ -268,16 +270,16 @@ jobs:
         echo "🗄️ Running database migrations..."
         uv run alembic upgrade head
       env:
-        DATABASE_URL: postgresql+asyncpg://test_results_user:test_results_password@localhost:5433/test_results
+        DATABASE_URL: postgresql+asyncpg://test_results_user:test_results_password@localhost:5434/test_results_contract
 
     - name: Run contract tests
       run: |
         echo "📋 Running contract tests..."
         uv run python -m pytest tests/contract/ -v --tb=short
       env:
-        DATABASE_URL: postgresql+asyncpg://test_results_user:test_results_password@localhost:5433/test_results
+        DATABASE_URL: postgresql+asyncpg://test_results_user:test_results_password@localhost:5434/test_results_contract
         STORAGE_TYPE: minio
-        MINIO_ENDPOINT: http://localhost:9000
+        MINIO_ENDPOINT: http://localhost:9002
         MINIO_ACCESS_KEY: minioadmin
         MINIO_SECRET_KEY: minioadmin123
         MINIO_BUCKET_PREFIX: test
