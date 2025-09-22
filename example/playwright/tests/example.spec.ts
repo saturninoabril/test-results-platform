@@ -16,3 +16,10 @@ test('get started link', async ({ page }) => {
   // Expects page to have a heading with the name of Installation.
   await expect(page.getByRole('heading', { name: 'Installation' })).toBeVisible();
 });
+
+test('failing test for artifact upload demo', async ({ page }) => {
+  await page.goto('https://playwright.dev/');
+
+  // This test will intentionally fail to generate artifacts (screenshot)
+  await expect(page.getByRole('heading', { name: 'This heading does not exist' })).toBeVisible();
+});

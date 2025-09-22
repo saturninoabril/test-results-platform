@@ -14,14 +14,10 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import declarative_base
 
 from .config import get_settings
 
 logger = structlog.get_logger()
-
-# Base class for all models
-Base = declarative_base()
 
 # Global engine instance
 _engine: AsyncEngine | None = None
@@ -41,6 +37,8 @@ def create_engine(database_url: str | None = None) -> AsyncEngine:
         pool_size=settings.database.pool_size,
         max_overflow=settings.database.max_overflow,
         pool_timeout=settings.database.pool_timeout,
+        pool_recycle=3600,  # Recycle connections every hour to prevent stale connections
+        pool_pre_ping=True,  # Test connections before use
         echo=echo,
         echo_pool=settings.is_development(),
     )
@@ -107,16 +105,38 @@ def get_session_maker() -> async_sessionmaker[AsyncSession]:
 
 @asynccontextmanager
 async def get_session() -> AsyncGenerator[AsyncSession]:
-    """Get database session with automatic cleanup."""
+    """Get database session with automatic cleanup and retry logic."""
+    from sqlalchemy.exc import SQLAlchemyError
+
     session_maker = get_session_maker()
-    async with session_maker() as session:
+
+    # Retry logic for connection issues only
+    max_retries = 3
+    retry_count = 0
+
+    while retry_count <= max_retries:
         try:
-            yield session
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+            async with session_maker() as session:
+                # Test the connection before yielding
+                await session.execute(text("SELECT 1"))
+                yield session
+                break
+        except SQLAlchemyError as e:
+            if retry_count >= max_retries:
+                logger.error(
+                    "Database session failed after retries", error=str(e), retry_count=retry_count
+                )
+                raise
+            logger.warning(
+                "Database session failed, retrying", error=str(e), retry_count=retry_count
+            )
+            retry_count += 1
+            # Re-initialize engine on connection errors
+            if "connection is closed" in str(e).lower():
+                logger.warning("Connection closed error detected, reinitializing database")
+                await close_database()
+                await init_database()
+                session_maker = get_session_maker()
 
 
 async def health_check() -> bool:
@@ -134,6 +154,9 @@ async def health_check() -> bool:
 
 async def create_tables() -> None:
     """Create all tables (for development/testing)."""
+    # Import models to ensure they're registered with Base.metadata
+    from ..models.base import Base
+
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -142,6 +165,8 @@ async def create_tables() -> None:
 
 async def drop_tables() -> None:
     """Drop all tables (for testing)."""
+    from ..models.base import Base
+
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)

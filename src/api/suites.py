@@ -14,7 +14,6 @@ from fastapi.responses import Response
 from ..lib.middleware import RequireSuitesDelete, RequireSuitesRead, RequireSuitesWrite
 
 # Note: Services imported but notification logic is commented out in update_suite
-# from ..services.environment_service import EnvironmentService
 # from ..services.framework_service import FrameworkService
 # from ..services.notification_service import get_notification_service
 from ..services.suite_service import (
@@ -45,8 +44,6 @@ async def create_suite(request: SuiteCreateRequest) -> SuiteResponse:
             "Suite created via API",
             suite_id=str(suite.id),
             name=suite.name,
-            framework_id=str(suite.framework_id),
-            environment_id=str(suite.environment_id),
         )
         return suite
 
@@ -70,8 +67,6 @@ async def create_suite(request: SuiteCreateRequest) -> SuiteResponse:
     dependencies=[RequireSuitesRead],
 )
 async def get_suites(
-    framework_id: UUID | None = Query(None, description="Filter by framework ID"),
-    environment_id: UUID | None = Query(None, description="Filter by environment ID"),
     name: str | None = Query(None, description="Filter by suite name (partial match)"),
     start_date: datetime | None = Query(None, description="Filter by creation date start"),
     end_date: datetime | None = Query(None, description="Filter by creation date end"),
@@ -80,10 +75,8 @@ async def get_suites(
 ) -> list[SuiteResponse]:
     """Get test suites with optional filtering."""
     try:
-        if framework_id or environment_id or name or start_date or end_date:
+        if name or start_date or end_date:
             suites = await SuiteService.get_suites_by_filter(
-                framework_id=framework_id,
-                environment_id=environment_id,
                 name=name,
                 start_date=start_date,
                 end_date=end_date,
@@ -93,8 +86,6 @@ async def get_suites(
             logger.debug(
                 "Filtered suites retrieved via API",
                 count=len(suites),
-                framework_id=str(framework_id) if framework_id else None,
-                environment_id=str(environment_id) if environment_id else None,
             )
         else:
             suites = await SuiteService.get_suites()
@@ -119,16 +110,14 @@ async def get_suites(
     dependencies=[RequireSuitesRead],
 )
 async def get_suite_statistics(
-    framework_id: UUID | None = Query(None, description="Filter by framework ID"),
-    environment_id: UUID | None = Query(None, description="Filter by environment ID"),
     start_date: datetime | None = Query(None, description="Filter by creation date start"),
     end_date: datetime | None = Query(None, description="Filter by creation date end"),
 ) -> dict[str, Any]:
     """Get aggregated suite statistics."""
     try:
         statistics = await SuiteService.get_suite_statistics(
-            framework_id=framework_id,
-            environment_id=environment_id,
+            # framework_id parameter removed - framework info now in metadata
+            # environment_id parameter removed
             start_date=start_date,
             end_date=end_date,
         )

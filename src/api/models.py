@@ -3,7 +3,6 @@ Pydantic models for API request and response validation.
 Defines the contract for all REST API endpoints.
 """
 
-import re
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -17,132 +16,24 @@ class BaseAPIModel(BaseModel):
     model_config = {"from_attributes": True, "json_encoders": {datetime: lambda v: v.isoformat()}}
 
 
-# Framework Models
-class FrameworkCreateRequest(BaseAPIModel):
-    """Request model for creating a test framework."""
-
-    name: str = Field(..., description="Framework name (lowercase, alphanumeric)")
-    version: str = Field(..., description="Semantic version (e.g., 1.55.0)")
-    metadata: dict[str, Any] | None = Field(None, description="Framework-specific metadata")
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, v: str) -> str:
-        """Validate framework name format."""
-        if not re.match(r"^[a-z][a-z0-9\-]*$", v):
-            raise ValueError("Framework name must be lowercase alphanumeric with optional hyphens")
-        return v
-
-    @field_validator("version")
-    @classmethod
-    def validate_version(cls, v: str) -> str:
-        """Validate semantic version format."""
-        if not re.match(r"^\d+\.\d+\.\d+$", v):
-            raise ValueError("Version must be semantic version format (e.g., 1.55.0)")
-        return v
-
-
-class FrameworkUpdateRequest(BaseAPIModel):
-    """Request model for updating a test framework."""
-
-    name: str = Field(..., description="Framework name (lowercase, alphanumeric)")
-    version: str = Field(..., description="Semantic version (e.g., 1.55.0)")
-    metadata: dict[str, Any] | None = Field(None, description="Framework-specific metadata")
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, v: str) -> str:
-        """Validate framework name format."""
-        if not re.match(r"^[a-z][a-z0-9\-]*$", v):
-            raise ValueError("Framework name must be lowercase alphanumeric with optional hyphens")
-        return v
-
-    @field_validator("version")
-    @classmethod
-    def validate_version(cls, v: str) -> str:
-        """Validate semantic version format."""
-        if not re.match(r"^\d+\.\d+\.\d+$", v):
-            raise ValueError("Version must be semantic version format (e.g., 1.55.0)")
-        return v
-
-
-class FrameworkResponse(BaseAPIModel):
-    """Response model for test framework."""
-
-    id: UUID = Field(..., description="Framework unique identifier")
-    name: str = Field(..., description="Framework name")
-    version: str = Field(..., description="Framework version")
-    metadata: dict[str, Any] | None = Field(None, description="Framework-specific metadata")
-    created_at: datetime = Field(..., description="Creation timestamp")
-    updated_at: datetime = Field(..., description="Last update timestamp")
-
-
-# Environment Models
-class EnvironmentCreateRequest(BaseAPIModel):
-    """Request model for creating a test environment."""
-
-    name: str = Field(..., description="Environment name")
-    browser: str | None = Field(None, description="Browser name (chrome, firefox, safari, edge)")
-    os: str | None = Field(None, description="Operating system")
-    metadata: dict[str, Any] | None = Field(None, description="Environment-specific metadata")
-
-    @field_validator("browser")
-    @classmethod
-    def validate_browser(cls, v: str | None) -> str | None:
-        """Validate browser name."""
-        if v is not None:
-            allowed_browsers = {"chrome", "firefox", "safari", "edge", "webkit"}
-            if v.lower() not in allowed_browsers:
-                raise ValueError(f"Browser must be one of: {', '.join(allowed_browsers)}")
-            return v.lower()
-        return v
-
-
-class EnvironmentUpdateRequest(BaseAPIModel):
-    """Request model for updating a test environment."""
-
-    name: str = Field(..., description="Environment name")
-    browser: str | None = Field(None, description="Browser name (chrome, firefox, safari, edge)")
-    os: str | None = Field(None, description="Operating system")
-    metadata: dict[str, Any] | None = Field(None, description="Environment-specific metadata")
-
-    @field_validator("browser")
-    @classmethod
-    def validate_browser(cls, v: str | None) -> str | None:
-        """Validate browser name."""
-        if v is not None:
-            allowed_browsers = {"chrome", "firefox", "safari", "edge", "webkit"}
-            if v.lower() not in allowed_browsers:
-                raise ValueError(f"Browser must be one of: {', '.join(allowed_browsers)}")
-            return v.lower()
-        return v
-
-
-class EnvironmentResponse(BaseAPIModel):
-    """Response model for test environment."""
-
-    id: UUID = Field(..., description="Environment unique identifier")
-    name: str = Field(..., description="Environment name")
-    browser: str | None = Field(None, description="Browser name")
-    os: str | None = Field(None, description="Operating system")
-    metadata: dict[str, Any] | None = Field(None, description="Environment-specific metadata")
-    created_at: datetime = Field(..., description="Creation timestamp")
-    updated_at: datetime = Field(..., description="Last update timestamp")
-
-
 # Suite Models
 class SuiteCreateRequest(BaseAPIModel):
     """Request model for creating a test suite."""
 
-    framework_id: UUID = Field(..., description="Framework ID")
-    environment_id: UUID = Field(..., description="Environment ID")
     name: str = Field(..., description="Suite name")
     total_count: int = Field(..., ge=0, description="Total number of tests")
     passed_count: int = Field(..., ge=0, description="Number of passed tests")
     failed_count: int = Field(..., ge=0, description="Number of failed tests")
     skipped_count: int = Field(..., ge=0, description="Number of skipped tests")
     duration_ms: int | None = Field(None, ge=0, description="Total duration in milliseconds")
-    metadata: dict[str, Any] | None = Field(None, description="Suite-specific metadata")
+    framework_metadata: dict[str, Any] | None = Field(
+        None, description="Framework-specific metadata"
+    )
+    environment_metadata: dict[str, Any] | None = Field(
+        None, description="Environment-specific metadata"
+    )
+    server_metadata: dict[str, Any] | None = Field(None, description="Server-specific metadata")
+    ci_run_metadata: dict[str, Any] | None = Field(None, description="CI-specific metadata")
 
     @field_validator("passed_count", "failed_count", "skipped_count")
     @classmethod
@@ -165,15 +56,20 @@ class SuiteCreateRequest(BaseAPIModel):
 class SuiteUpdateRequest(BaseAPIModel):
     """Request model for updating a test suite."""
 
-    framework_id: UUID = Field(..., description="Framework ID")
-    environment_id: UUID = Field(..., description="Environment ID")
     name: str = Field(..., description="Suite name")
     total_count: int = Field(..., ge=0, description="Total number of tests")
     passed_count: int = Field(..., ge=0, description="Number of passed tests")
     failed_count: int = Field(..., ge=0, description="Number of failed tests")
     skipped_count: int = Field(..., ge=0, description="Number of skipped tests")
     duration_ms: int | None = Field(None, ge=0, description="Total duration in milliseconds")
-    metadata: dict[str, Any] | None = Field(None, description="Suite-specific metadata")
+    framework_metadata: dict[str, Any] | None = Field(
+        None, description="Framework-specific metadata"
+    )
+    environment_metadata: dict[str, Any] | None = Field(
+        None, description="Environment-specific metadata"
+    )
+    server_metadata: dict[str, Any] | None = Field(None, description="Server-specific metadata")
+    ci_run_metadata: dict[str, Any] | None = Field(None, description="CI-specific metadata")
 
     def model_post_init(self, __context: Any) -> None:
         """Validate count consistency after model creation."""
@@ -190,15 +86,20 @@ class SuiteResponse(BaseAPIModel):
     """Response model for test suite."""
 
     id: UUID = Field(..., description="Suite unique identifier")
-    framework_id: UUID = Field(..., description="Framework ID")
-    environment_id: UUID = Field(..., description="Environment ID")
     name: str = Field(..., description="Suite name")
     total_count: int = Field(..., description="Total number of tests")
     passed_count: int = Field(..., description="Number of passed tests")
     failed_count: int = Field(..., description="Number of failed tests")
     skipped_count: int = Field(..., description="Number of skipped tests")
     duration_ms: int | None = Field(None, description="Total duration in milliseconds")
-    metadata: dict[str, Any] | None = Field(None, description="Suite-specific metadata")
+    framework_metadata: dict[str, Any] | None = Field(
+        None, description="Framework-specific metadata"
+    )
+    environment_metadata: dict[str, Any] | None = Field(
+        None, description="Environment-specific metadata"
+    )
+    server_metadata: dict[str, Any] | None = Field(None, description="Server-specific metadata")
+    ci_run_metadata: dict[str, Any] | None = Field(None, description="CI-specific metadata")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -215,7 +116,6 @@ class ResultCreateRequest(BaseAPIModel):
     tags: list[str] = Field(default_factory=list, description="Test tags")
     external_id: str | None = Field(None, description="External test ID")
     full_title: str | None = Field(None, description="Full test title/path")
-    metadata: dict[str, Any] | None = Field(None, description="Test-specific metadata")
 
     @field_validator("status")
     @classmethod
@@ -238,7 +138,6 @@ class ResultUpdateRequest(BaseAPIModel):
     tags: list[str] = Field(default_factory=list, description="Test tags")
     external_id: str | None = Field(None, description="External test ID")
     full_title: str | None = Field(None, description="Full test title/path")
-    metadata: dict[str, Any] | None = Field(None, description="Test-specific metadata")
 
     @field_validator("status")
     @classmethod
@@ -262,7 +161,6 @@ class ResultResponse(BaseAPIModel):
     tags: list[str] = Field(..., description="Test tags")
     external_id: str | None = Field(None, description="External test ID")
     full_title: str | None = Field(None, description="Full test title/path")
-    metadata: dict[str, Any] | None = Field(None, description="Test-specific metadata")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -278,7 +176,6 @@ class ArtifactCreateRequest(BaseAPIModel):
     file_size: int = Field(..., ge=0, description="File size in bytes")
     content_type: str = Field(..., description="MIME content type")
     checksum: str = Field(..., description="SHA-256 checksum")
-    metadata: dict[str, Any] | None = Field(None, description="Artifact-specific metadata")
 
     @field_validator("artifact_type")
     @classmethod
@@ -302,7 +199,6 @@ class ArtifactResponse(BaseAPIModel):
     content_type: str = Field(..., description="MIME content type")
     checksum: str = Field(..., description="SHA-256 checksum")
     storage_key: str = Field(..., description="Storage key/path")
-    metadata: dict[str, Any] | None = Field(None, description="Artifact-specific metadata")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 

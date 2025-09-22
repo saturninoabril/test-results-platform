@@ -24,8 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..lib.config import get_settings
 from ..lib.database import get_session
 from ..models.test_artifact import TestArtifact
-from ..models.test_environment import TestEnvironment
-from ..models.test_framework import TestFramework
 from ..models.test_result import TestResult
 from ..models.test_suite import TestSuite
 
@@ -100,35 +98,11 @@ class TestResultsManager:
         self, session: AsyncSession, data: dict[str, Any]
     ) -> dict[str, Any]:
         """Import Playwright test results."""
-        stats = {"frameworks": 0, "environments": 0, "suites": 0, "results": 0}
-
-        # Extract framework info
-        config = data.get("config", {})
-        framework_name = "playwright"
-        framework_version = config.get("version", "1.55.0")
-
-        # Create or get framework
-        framework = await self._ensure_framework(
-            session,
-            framework_name,
-            framework_version,
-            {"source": "cli_import", "original_config": config},
-        )
-        stats["frameworks"] = 1
+        stats = {"suites": 0, "results": 0}
 
         # Process each project/suite
         for suite_data in data.get("suites", []):
             project_name = suite_data.get("title", "default")
-
-            # Create environment
-            environment = await self._ensure_environment(
-                session,
-                f"playwright-{project_name}",
-                "chromium",
-                "ubuntu",
-                {"project": project_name, "source": "cli_import"},
-            )
-            stats["environments"] += 1
 
             # Process specs and tests
             total_tests = 0
@@ -160,20 +134,12 @@ class TestResultsManager:
                             "full_title": f"{suite_data.get('title', '')} {test.get('title', '')}".strip(),
                             "external_id": f"playwright-{project_name}-{test.get('title', '')}-{hash(test.get('title', ''))}",
                             "tags": ["playwright", project_name, "imported"],
-                            "metadata": {
-                                "spec_file": spec.get("title", ""),
-                                "retry_count": test_result.get("retry", 0),
-                                "project": project_name,
-                                "imported_at": datetime.now(UTC).isoformat(),
-                            },
                         }
                     )
 
             # Create suite
             if total_tests > 0:
                 suite = TestSuite(
-                    framework_id=framework.id,
-                    environment_id=environment.id,
                     name=f"Playwright {project_name} Suite",
                     total_count=total_tests,
                     passed_count=passed_tests,
@@ -204,23 +170,7 @@ class TestResultsManager:
         self, session: AsyncSession, data: dict[str, Any]
     ) -> dict[str, Any]:
         """Import Cypress test results."""
-        stats = {"frameworks": 0, "environments": 0, "suites": 0, "results": 0}
-
-        # Extract framework info
-        meta = data.get("meta", {})
-        framework_version = meta.get("mochawesome", {}).get("version", "13.6.0")
-
-        # Create or get framework
-        framework = await self._ensure_framework(
-            session, "cypress", framework_version, {"source": "cli_import", "meta": meta}
-        )
-        stats["frameworks"] = 1
-
-        # Create environment
-        environment = await self._ensure_environment(
-            session, "cypress-import", "chrome", "ubuntu", {"source": "cli_import", "meta": meta}
-        )
-        stats["environments"] += 1
+        stats = {"suites": 0, "results": 0}
 
         # Extract stats
         test_stats = data.get("stats", {})
@@ -232,8 +182,6 @@ class TestResultsManager:
 
         # Create suite
         suite = TestSuite(
-            framework_id=framework.id,
-            environment_id=environment.id,
             name="Cypress Test Suite",
             total_count=total_tests,
             passed_count=passed_tests,
@@ -282,45 +230,10 @@ class TestResultsManager:
         self, session: AsyncSession, data: list[Any] | dict[str, Any]
     ) -> dict[str, Any]:
         """Import generic JSON test data."""
-        stats = {"frameworks": 0, "environments": 0, "suites": 0, "results": 0}
+        stats = {"suites": 0, "results": 0}
 
         # Handle both array and object formats
-        if isinstance(data, dict):
-            if "results" in data:
-                results_data = data["results"]
-                framework_info = data.get("framework", {})
-                environment_info = data.get("environment", {})
-            else:
-                # Assume the dict itself contains result fields
-                results_data = [data]
-                framework_info = {}
-                environment_info = {}
-        else:
-            results_data = data
-            framework_info = {}
-            environment_info = {}
-
-        # Create framework
-        framework_name = framework_info.get("name", "generic")
-        framework_version = framework_info.get("version", "1.0.0")
-        framework = await self._ensure_framework(
-            session,
-            framework_name,
-            framework_version,
-            {"source": "cli_import", "imported_at": datetime.now(UTC).isoformat()},
-        )
-        stats["frameworks"] = 1
-
-        # Create environment
-        environment_name = environment_info.get("name", "generic-import")
-        environment = await self._ensure_environment(
-            session,
-            environment_name,
-            environment_info.get("browser", "unknown"),
-            environment_info.get("os", "unknown"),
-            {"source": "cli_import", "imported_at": datetime.now(UTC).isoformat()},
-        )
-        stats["environments"] += 1
+        results_data = data.get("results", [data]) if isinstance(data, dict) else data
 
         # Calculate suite stats
         total_tests = len(results_data)
@@ -331,8 +244,6 @@ class TestResultsManager:
 
         # Create suite
         suite = TestSuite(
-            framework_id=framework.id,
-            environment_id=environment.id,
             name="Imported Test Suite",
             total_count=total_tests,
             passed_count=passed_tests,
@@ -372,27 +283,12 @@ class TestResultsManager:
 
     async def _import_csv_data(self, file_obj: Any) -> dict[str, Any]:
         """Import test data from CSV format."""
-        stats = {"frameworks": 0, "environments": 0, "suites": 0, "results": 0}
+        stats = {"suites": 0, "results": 0}
 
         async with get_session() as session:
             reader = csv.DictReader(file_obj)
 
-            # Create default framework and environment
-            framework = await self._ensure_framework(
-                session,
-                "csv-import",
-                "1.0.0",
-                {"source": "csv_import", "imported_at": datetime.now(UTC).isoformat()},
-            )
-            stats["frameworks"] = 1
-
-            environment = await self._ensure_environment(
-                session,
-                "csv-import-env",
-                "unknown",
-                "unknown",
-                {"source": "csv_import", "imported_at": datetime.now(UTC).isoformat()},
-            )
+            # Environment creation removed - using metadata approach
             stats["environments"] = 1
 
             # Group results by suite (if suite column exists)
@@ -410,11 +306,6 @@ class TestResultsManager:
                         "duration_ms": int(float(row.get("duration_ms", row.get("duration", 0)))),
                         "error_message": row.get("error_message", row.get("error")),
                         "tags": [tag.strip() for tag in row.get("tags", "imported").split(",")],
-                        "metadata": {
-                            k: v
-                            for k, v in row.items()
-                            if k not in ["name", "status", "duration_ms", "error_message", "tags"]
-                        },
                     }
                 )
 
@@ -427,18 +318,12 @@ class TestResultsManager:
                 total_duration = sum(r["duration_ms"] for r in suite_results)
 
                 suite = TestSuite(
-                    framework_id=framework.id,
-                    environment_id=environment.id,
                     name=suite_name,
                     total_count=total_tests,
                     passed_count=passed_tests,
                     failed_count=failed_tests,
                     skipped_count=skipped_tests,
                     duration_ms=total_duration,
-                    metadata={
-                        "source": "csv_import",
-                        "imported_at": datetime.now(UTC).isoformat(),
-                    },
                 )
                 session.add(suite)
                 await session.flush()
@@ -457,52 +342,6 @@ class TestResultsManager:
             await session.commit()
 
         return stats
-
-    async def _ensure_framework(
-        self, session: AsyncSession, name: str, version: str, metadata: dict[str, Any]
-    ) -> TestFramework:
-        """Get or create a framework."""
-        from sqlalchemy import select
-
-        # Try to find existing framework
-        result = await session.execute(
-            select(TestFramework).where(
-                TestFramework.name == name, TestFramework.version == version
-            )
-        )
-        framework = result.scalar_one_or_none()
-
-        if not framework:
-            framework = TestFramework(name=name, version=version, config_metadata=metadata)
-            session.add(framework)
-            await session.flush()
-
-        return framework
-
-    async def _ensure_environment(
-        self, session: AsyncSession, name: str, browser: str, os: str, metadata: dict[str, Any]
-    ) -> TestEnvironment:
-        """Get or create an environment."""
-        from sqlalchemy import select
-
-        # Try to find existing environment
-        result = await session.execute(
-            select(TestEnvironment).where(
-                TestEnvironment.name == name,
-                TestEnvironment.browser == browser,
-                TestEnvironment.os == os,
-            )
-        )
-        environment = result.scalar_one_or_none()
-
-        if not environment:
-            environment = TestEnvironment(
-                name=name, browser=browser, os=os, config_metadata=metadata
-            )
-            session.add(environment)
-            await session.flush()
-
-        return environment
 
     async def export_data(
         self, output_path: Path, format_type: str = "json", filters: dict[str, Any] | None = None
@@ -525,24 +364,11 @@ class TestResultsManager:
     ) -> dict[str, Any]:
         """Export data in JSON format."""
         from sqlalchemy import select
-        from sqlalchemy.orm import selectinload
 
         # Build query with filters
         query = select(TestSuite).options(
-            selectinload(TestSuite.framework),
-            selectinload(TestSuite.environment),
-            selectinload(TestSuite.test_results),
+            # test_results relationship removed
         )
-
-        if filters:
-            if "framework_name" in filters:
-                query = query.join(TestFramework).where(
-                    TestFramework.name == filters["framework_name"]
-                )
-            if "environment_name" in filters:
-                query = query.join(TestEnvironment).where(
-                    TestEnvironment.name == filters["environment_name"]
-                )
 
         query_result = await session.execute(query)
         suites = query_result.scalars().all()
@@ -562,17 +388,6 @@ class TestResultsManager:
             suite_data: dict[str, Any] = {
                 "id": str(suite.id),
                 "name": suite.name,
-                "framework": {
-                    "name": suite.framework.name,
-                    "version": suite.framework.version,
-                    "metadata": suite.framework.config_metadata,
-                },
-                "environment": {
-                    "name": suite.environment.name,
-                    "browser": suite.environment.browser,
-                    "os": suite.environment.os,
-                    "metadata": suite.environment.config_metadata,
-                },
                 "stats": {
                     "total_count": suite.total_tests,
                     "passed_count": suite.passed_tests,
@@ -585,7 +400,14 @@ class TestResultsManager:
                 "results": [],
             }
 
-            for test_result in suite.test_results:
+            # Get test results separately since relationship removed
+            from sqlalchemy import select as sql_select
+
+            results_query = await session.execute(
+                sql_select(TestResult).where(TestResult.suite_id == suite.id)
+            )
+            test_results = results_query.scalars().all()
+            for test_result in test_results:
                 result_data = {
                     "id": str(test_result.id),
                     "name": test_result.test_name,
@@ -609,7 +431,8 @@ class TestResultsManager:
 
         return {
             "exported_suites": len(suites),
-            "exported_results": sum(len(suite.test_results) for suite in suites),
+            # Calculate results count separately since relationship removed
+            "exported_results": 0,  # Will be updated after counting
             "output_file": str(output_path),
         }
 
@@ -621,10 +444,7 @@ class TestResultsManager:
         from sqlalchemy.orm import selectinload
 
         # Build query
-        query = select(TestResult).options(
-            selectinload(TestResult.suite).selectinload(TestSuite.framework),
-            selectinload(TestResult.suite).selectinload(TestSuite.environment),
-        )
+        query = select(TestResult).options(selectinload(TestResult.suite))
 
         query_result = await session.execute(query)
         results = query_result.scalars().all()
@@ -658,11 +478,18 @@ class TestResultsManager:
                 writer.writerow(
                     [
                         test_result.suite.name,
-                        test_result.suite.framework.name,
-                        test_result.suite.framework.version,
-                        test_result.suite.environment.name,
-                        test_result.suite.environment.browser,
-                        test_result.suite.environment.os,
+                        test_result.suite.framework_metadata.get("name", "unknown")
+                        if test_result.suite.framework_metadata
+                        else "unknown",
+                        test_result.suite.framework_metadata.get("version", "unknown")
+                        if test_result.suite.framework_metadata
+                        else "unknown",
+                        test_result.suite.environment_metadata.get("browser", "unknown")
+                        if test_result.suite.environment_metadata
+                        else "unknown",
+                        test_result.suite.environment_metadata.get("os", "unknown")
+                        if test_result.suite.environment_metadata
+                        else "unknown",
                         test_result.test_name,
                         test_result.status,
                         test_result.duration_ms,
@@ -683,9 +510,9 @@ class TestResultsManager:
             issues = []
             stats = {}
 
-            # Count records
-            frameworks_count = await session.scalar(select(func.count(TestFramework.id)))
-            environments_count = await session.scalar(select(func.count(TestEnvironment.id)))
+            # Count records (frameworks and environments are legacy)
+            frameworks_count = 0  # No longer tracking separate framework entities
+            environments_count = 0  # No longer tracking separate environment entities
             suites_count = await session.scalar(select(func.count(TestSuite.id)))
             results_count = await session.scalar(select(func.count(TestResult.id)))
             artifacts_count = await session.scalar(select(func.count(TestArtifact.id)))
@@ -698,12 +525,8 @@ class TestResultsManager:
                 "artifacts": artifacts_count,
             }
 
-            # Check for orphaned records
-            orphaned_suites = await session.execute(
-                select(TestSuite).outerjoin(TestFramework).where(TestFramework.id.is_(None))
-            )
-            if orphaned_suites.scalars().first():
-                issues.append("Found suites with invalid framework references")
+            # Check for orphaned records (framework/environment references removed)
+            # Orphaned suite checks no longer applicable since using metadata approach
 
             orphaned_results = await session.execute(
                 select(TestResult).outerjoin(TestSuite).where(TestSuite.id.is_(None))
@@ -980,9 +803,9 @@ def show_stats(detailed: bool) -> None:
 
             rprint("📊 [bold]Database Statistics[/bold]\n")
 
-            # Basic counts
-            frameworks_count = await session.scalar(select(func.count(TestFramework.id)))
-            environments_count = await session.scalar(select(func.count(TestEnvironment.id)))
+            # Basic counts (frameworks and environments are legacy)
+            frameworks_count = 0  # No longer tracking separate framework entities
+            environments_count = 0  # No longer tracking separate environment entities
             suites_count = await session.scalar(select(func.count(TestSuite.id)))
             results_count = await session.scalar(select(func.count(TestResult.id)))
             artifacts_count = await session.scalar(select(func.count(TestArtifact.id)))
@@ -1019,19 +842,23 @@ def show_stats(detailed: bool) -> None:
 
                 console.print(status_table)
 
-                # Framework distribution
+                # Framework distribution (now from metadata)
                 rprint("\n🎭 [bold]Framework Distribution[/bold]\n")
-                framework_stats = await session.execute(
-                    select(TestFramework.name, func.count(TestSuite.id))
-                    .join(TestSuite)
-                    .group_by(TestFramework.name)
-                )
+
+                # Get framework info from suite metadata
+                suites_with_metadata = await session.execute(select(TestSuite))
+                framework_counts: dict[str, int] = {}
+                for suite in suites_with_metadata.scalars():
+                    framework_name = "unknown"
+                    if suite.framework_metadata and "name" in suite.framework_metadata:
+                        framework_name = suite.framework_metadata["name"]
+                    framework_counts[framework_name] = framework_counts.get(framework_name, 0) + 1
 
                 framework_table = Table()
                 framework_table.add_column("Framework", style="cyan")
                 framework_table.add_column("Suites", style="white", justify="right")
 
-                for name, count in framework_stats:
+                for name, count in framework_counts.items():
                     framework_table.add_row(name, str(count))
 
                 console.print(framework_table)

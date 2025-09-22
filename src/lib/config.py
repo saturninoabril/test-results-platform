@@ -28,8 +28,10 @@ class DatabaseSettings(BaseSettings):
     @classmethod
     def validate_database_url(cls, v: str) -> str:
         """Validate database URL format."""
-        if not v.startswith(("postgresql://", "postgresql+asyncpg://")):
-            raise ValueError("Database URL must start with postgresql:// or postgresql+asyncpg://")
+        if not v.startswith(("postgresql://", "postgresql+asyncpg://", "sqlite+aiosqlite://")):
+            raise ValueError(
+                "Database URL must start with postgresql://, postgresql+asyncpg://, or sqlite+aiosqlite://"
+            )
         return v
 
 
@@ -214,6 +216,9 @@ class Settings(BaseSettings):
 
     def get_bucket_name(self, artifact_type: str) -> str:
         """Get bucket name for artifact type and environment."""
+        # For playwright, use the name directly without prefix
+        if artifact_type == "playwright":
+            return artifact_type
         return f"{self.storage.bucket_prefix}-{artifact_type}"
 
     def is_production(self) -> bool:

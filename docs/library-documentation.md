@@ -10,7 +10,6 @@ The Test Results Management API is built with a library-first architecture, wher
 src/
 ├── models/          # SQLAlchemy database models
 │   ├── base.py         # Base model with common fields
-│   ├── test_framework.py  # TestFramework model
 │   ├── test_environment.py # TestEnvironment model
 │   ├── test_suite.py   # TestSuite model
 │   ├── test_result.py  # TestResult model
@@ -55,115 +54,6 @@ class BaseModel(Base):
         for key, value in data.items():
             if hasattr(self, key) and key not in ['id', 'created_at']:
                 setattr(self, key, value)
-
-# Usage examples:
-from src.models.test_framework import TestFramework
-
-# Create instance
-framework = TestFramework(
-    id="playwright-1.55.0",
-    name="Playwright",
-    version="1.55.0"
-)
-
-# Convert to dict
-data = framework.to_dict()
-# Returns: {"id": "playwright-1.55.0", "name": "Playwright", ...}
-
-# Update from dict
-framework.update_from_dict({"version": "1.56.0"})
-```
-
-### TestFramework Model (`src/models/test_framework.py`)
-
-Represents testing frameworks like Playwright, Cypress, etc.
-
-```python
-from sqlalchemy import Column, String, JSON
-from .base import BaseModel
-
-class TestFramework(BaseModel):
-    __tablename__ = 'test_frameworks'
-
-    id = Column(String(255), primary_key=True)  # e.g., "playwright-1.55.0"
-    name = Column(String(100), nullable=False)   # e.g., "Playwright"
-    version = Column(String(50), nullable=False) # e.g., "1.55.0"
-    metadata = Column(JSON, default=dict)        # Framework-specific config
-
-# Usage examples:
-framework = TestFramework(
-    id="cypress-13.0.0",
-    name="Cypress",
-    version="13.0.0",
-    metadata={
-        "supports_parallel": False,
-        "artifact_types": ["screenshot", "video"],
-        "config_file": "cypress.json"
-    }
-)
-
-# Query examples:
-async def get_frameworks_by_name(db: AsyncSession, name: str):
-    result = await db.execute(
-        select(TestFramework).where(TestFramework.name == name)
-    )
-    return result.scalars().all()
-
-async def get_latest_framework_version(db: AsyncSession, name: str):
-    result = await db.execute(
-        select(TestFramework)
-        .where(TestFramework.name == name)
-        .order_by(TestFramework.version.desc())
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
-```
-
-### TestEnvironment Model (`src/models/test_environment.py`)
-
-Defines execution environments for tests.
-
-```python
-from sqlalchemy import Column, String, JSON
-from .base import BaseModel
-
-class TestEnvironment(BaseModel):
-    __tablename__ = 'test_environments'
-
-    id = Column(String(255), primary_key=True)   # e.g., "chrome-ubuntu-ci"
-    name = Column(String(200), nullable=False)   # e.g., "Chrome on Ubuntu (CI)"
-    browser = Column(String(50))                 # e.g., "chromium", "firefox"
-    os = Column(String(50))                      # e.g., "ubuntu-latest", "windows"
-    metadata = Column(JSON, default=dict)        # Environment-specific config
-
-# Usage examples:
-env = TestEnvironment(
-    id="firefox-macos-local",
-    name="Firefox on macOS (Local Development)",
-    browser="firefox",
-    os="macOS",
-    metadata={
-        "headless": False,
-        "viewport": "1920x1080",
-        "device_scale_factor": 2,
-        "locale": "en-US",
-        "timezone": "America/New_York"
-    }
-)
-
-# Query examples:
-async def get_environments_by_browser(db: AsyncSession, browser: str):
-    result = await db.execute(
-        select(TestEnvironment).where(TestEnvironment.browser == browser)
-    )
-    return result.scalars().all()
-
-async def get_ci_environments(db: AsyncSession):
-    result = await db.execute(
-        select(TestEnvironment)
-        .where(TestEnvironment.metadata['ci_environment'].astext.isnot(None))
-    )
-    return result.scalars().all()
 ```
 
 ### TestSuite Model (`src/models/test_suite.py`)

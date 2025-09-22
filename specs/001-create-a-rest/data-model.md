@@ -46,8 +46,6 @@ Groups test results from a single execution run.
 **Fields**:
 - `id`: UUID, primary key
 - `name`: String (test suite name)
-- `framework_id`: UUID, foreign key to test_frameworks
-- `environment_id`: UUID, foreign key to test_environments
 - `total_tests`: Integer (count of tests in suite)
 - `passed_tests`: Integer (count of passed tests)
 - `failed_tests`: Integer (count of failed tests)
@@ -70,8 +68,6 @@ Groups test results from a single execution run.
 - completed_at: required, >= started_at
 
 **Relationships**:
-- belongs_to: test_framework
-- belongs_to: test_environment
 - has_many: test_results
 
 ### Test Result
@@ -166,8 +162,6 @@ Files associated with test execution (screenshots, videos, reports).
 - `test_artifacts(suite_id, artifact_type)` - Suite artifact type filtering
 
 ### Unique Constraints
-- `test_frameworks(name, version)` - Unique framework versions
-- `test_environments(name, browser, os)` - Unique environment combinations
 - `test_artifacts(storage_key)` - Unique S3 object keys
 
 ## State Transitions

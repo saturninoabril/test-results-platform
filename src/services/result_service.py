@@ -45,7 +45,6 @@ class ResultService:
             tags=result.tags or [],
             external_id=result.external_id,
             full_title=result.full_title,
-            metadata=result.config_metadata,
             created_at=result.created_at,
             updated_at=result.updated_at,
         )
@@ -69,7 +68,6 @@ class ResultService:
                 tags=request.tags,
                 external_id=request.external_id,
                 full_title=request.full_title,
-                config_metadata=request.metadata,
             )
 
             session.add(result)
@@ -120,7 +118,6 @@ class ResultService:
                     tags=request.tags,
                     external_id=request.external_id,
                     full_title=request.full_title,
-                    config_metadata=request.metadata,
                 )
                 results.append(result)
                 session.add(result)
@@ -184,13 +181,13 @@ class ResultService:
             # Update result fields - map API fields to database fields
             result.suite_id = request.suite_id
             result.test_name = request.name
-            result.status = request.status  # type: ignore[assignment]
+            result.status = request.status
             result.duration_ms = request.duration_ms or 0
             result.error_message = request.error_message
             result.tags = request.tags
             result.external_id = request.external_id
             result.full_title = request.full_title or ""
-            result.config_metadata = request.metadata
+            # Metadata field removed
 
             try:
                 await session.commit()

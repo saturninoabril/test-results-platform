@@ -65,12 +65,14 @@ DOCKER_IMAGE_PROD := $(PROJECT_NAME):prod
 DOCKER_REGISTRY ?= localhost:5000
 
 # Database configuration
-DATABASE_URL ?= postgresql://postgres:postgres@localhost:5432/test_results_$(ENV)
+DATABASE_URL ?= postgresql+asyncpg://test_results_user:test_results_password@localhost:5433/test_results
 
 # .PHONY declarations for all targets
 .PHONY: help check-requirements install upgrade dev dev-https dev-certs dev-certs-force dev-certs-trust dev-https-setup type-check lint format test-unit test-integration test-contract test-all
 .PHONY: build build-dev build-check docker-build docker-build-prod docker-publish docker-run
-.PHONY: db-upgrade db-downgrade db-reset db-seed clean clean-docker clean-all
+.PHONY: docker-up docker-down docker-logs docker-ps docker-restart
+.PHONY: db-upgrade db-downgrade db-reset db-seed clean clean-docker docker-prune clean-all
+.PHONY: playwright-test validate-artifacts download-object
 
 # Default target - show help
 help: ## Show this help message with available targets
@@ -90,8 +92,11 @@ help: ## Show this help message with available targets
 	@echo -e "$(GREEN)Database Commands:$(RESET)"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {if ($$1 ~ /^(db-.*)$$/) printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
+	@echo -e "$(GREEN)Playwright Demo Commands:$(RESET)"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {if ($$1 ~ /^(playwright-.*)$$/) printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@echo ""
 	@echo -e "$(GREEN)Utility Commands:$(RESET)"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {if ($$1 ~ /^(clean.*|help)$$/) printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {if ($$1 ~ /^(clean.*|help|download-object|stop)$$/) printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo -e "$(YELLOW)Environment Variables:$(RESET)"
 	@echo "  ENV=dev|test|prod     Set environment (default: dev)"
@@ -105,6 +110,7 @@ help: ## Show this help message with available targets
 	@echo "  make dev-https-setup      # View HTTPS setup documentation"
 	@echo "  make test-all             # Run complete test suite"
 	@echo "  make build ENV=prod       # Create production build"
+	@echo "  make playwright-test      # Run Playwright tests with reporter"
 
 # Development requirements validation
 check-requirements: ## Check Python 3.13+ and uv installation
@@ -465,7 +471,6 @@ db-seed: install ## Populate database with test data
 	else \
 		echo -e "$(YELLOW)⚠️  Test data import script not found$(RESET)"; \
 		echo -e "$(CYAN)Creating sample test frameworks and environments$(RESET)"; \
-		uv run python -c "from src.models.test_framework import TestFramework; from src.models.test_environment import TestEnvironment; print('Sample data creation would go here')"; \
 	fi
 	@echo -e "$(GREEN)Database seeded with test data$(RESET)"
 
@@ -482,10 +487,51 @@ clean: ## Remove Python cache and temporary files
 	@rm -rf build/ dist/ 2>/dev/null || true
 	@echo -e "$(GREEN)Python cache and temporary files cleaned$(RESET)"
 
+# =============================================================================
+# Docker Compose Commands
+# =============================================================================
+
+docker-up: ## Start all docker-compose services
+	@echo -e "$(BLUE)Starting docker-compose services...$(RESET)"
+	@if ! command -v docker-compose >/dev/null 2>&1; then \
+		echo -e "$(RED)❌ docker-compose not found$(RESET)"; \
+		echo -e "$(YELLOW)Please install Docker Compose: https://docs.docker.com/compose/install/$(RESET)"; \
+		exit 1; \
+	fi
+	@docker-compose up -d
+	@echo -e "$(GREEN)✅ Docker services started$(RESET)"
+	@echo -e "$(CYAN)Services available:$(RESET)"
+	@echo -e "  • PostgreSQL: localhost:5433"
+	@echo -e "  • MinIO: http://localhost:9000"
+	@echo -e "  • Adminer: http://localhost:8080"
+
+docker-down: ## Stop and remove docker-compose services
+	@echo -e "$(BLUE)Stopping docker-compose services...$(RESET)"
+	@docker-compose down
+	@echo -e "$(GREEN)✅ Docker services stopped$(RESET)"
+
+docker-logs: ## View docker-compose service logs
+	@echo -e "$(BLUE)Showing docker-compose service logs...$(RESET)"
+	@docker-compose logs -f
+
+docker-ps: ## Show status of docker-compose services
+	@echo -e "$(BLUE)Docker Compose Service Status$(RESET)"
+	@echo -e "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@docker-compose ps
+
+docker-restart: ## Restart docker-compose services
+	@echo -e "$(BLUE)Restarting docker-compose services...$(RESET)"
+	@docker-compose restart
+	@echo -e "$(GREEN)✅ Docker services restarted$(RESET)"
+
+# =============================================================================
+# Docker Cleanup Commands
+# =============================================================================
+
 clean-docker: ## Remove Docker development artifacts
 	@echo -e "$(BLUE)Cleaning Docker development artifacts...$(RESET)"
-	@echo -e "$(CYAN)Removing dangling images$(RESET)"
-	@docker image prune -f 2>/dev/null || echo -e "$(YELLOW)Docker not available or no images to clean$(RESET)"
+# 	@echo -e "$(CYAN)Removing dangling images$(RESET)"
+# 	@docker image prune -f 2>/dev/null || echo -e "$(YELLOW)Docker not available or no images to clean$(RESET)"
 	@echo -e "$(CYAN)Removing unused containers$(RESET)"
 	@docker container prune -f 2>/dev/null || echo -e "$(YELLOW)Docker not available or no containers to clean$(RESET)"
 	@echo -e "$(CYAN)Removing unused networks$(RESET)"
@@ -493,6 +539,23 @@ clean-docker: ## Remove Docker development artifacts
 	@echo -e "$(CYAN)Removing development volumes$(RESET)"
 	@docker volume ls -q -f label=project=$(PROJECT_NAME) | xargs -r docker volume rm 2>/dev/null || echo -e "$(YELLOW)No project volumes to clean$(RESET)"
 	@echo -e "$(GREEN)Docker development artifacts cleaned$(RESET)"
+
+docker-prune: ## Complete Docker cleanup (remove unused containers, networks, volumes, and build cache - preserves images)
+	@echo -e "$(BLUE)Performing Docker cleanup...$(RESET)"
+	@echo -e "$(RED)⚠️  WARNING: This will remove unused Docker resources$(RESET)"
+	@echo -e "$(YELLOW)This includes: unused containers, networks, volumes, and build cache$(RESET)"
+	@echo -e "$(GREEN)Images will be preserved$(RESET)"
+	@echo -e "$(YELLOW)Press Ctrl+C within 5 seconds to cancel...$(RESET)"
+	@sleep 5
+	@echo -e "$(CYAN)Removing unused containers...$(RESET)"
+	@docker container prune -f
+	@echo -e "$(CYAN)Removing unused networks...$(RESET)"
+	@docker network prune -f
+	@echo -e "$(CYAN)Removing unused volumes...$(RESET)"
+	@docker volume prune -f
+	@echo -e "$(CYAN)Removing build cache...$(RESET)"
+	@docker builder prune -f
+	@echo -e "$(GREEN)✅ Docker cleanup completed (images preserved)$(RESET)"
 
 clean-all: ## Complete cleanup of all artifacts
 	@echo -e "$(BLUE)Performing complete cleanup of all artifacts...$(RESET)"
@@ -506,3 +569,139 @@ clean-all: ## Complete cleanup of all artifacts
 	@rm -rf .tox/ 2>/dev/null || true
 	@rm -rf site-packages/ 2>/dev/null || true
 	@echo -e "$(GREEN)✅ Complete cleanup finished$(RESET)"
+
+playwright-test: ## Run Playwright tests with custom reporter integration and artifact validation
+	@echo -e "$(BLUE)Running Playwright tests with custom reporter...$(RESET)"
+	@echo -e "$(CYAN)Tests will stream results to Test Results Platform API$(RESET)"
+	@if [ ! -f "example/playwright/custom_reporter.ts" ]; then \
+		echo -e "$(RED)❌ example/playwright/custom_reporter.ts not found$(RESET)"; \
+		echo -e "$(YELLOW)Please ensure you're running from the project root$(RESET)"; \
+		exit 1; \
+	fi
+	@echo -e "$(CYAN)Phase 1: Running Playwright tests...$(RESET)"
+	@test_output=$$(cd example/playwright && npx playwright test --reporter=./custom_reporter.ts 2>&1); \
+	echo "$$test_output"; \
+	suite_id=$$(echo "$$test_output" | grep -o "suite_id=[a-f0-9-]*" | head -1 | cut -d= -f2 || \
+		echo "$$test_output" | grep -o "([a-f0-9-]*)" | head -1 | sed 's/[()]//g' || echo ""); \
+	if [ -n "$$suite_id" ]; then \
+		echo -e "$(GREEN)✅ Captured suite ID: $$suite_id$(RESET)"; \
+		echo "$$suite_id" > /tmp/playwright_suite_id; \
+	else \
+		echo -e "$(YELLOW)⚠️ Could not capture suite ID, will use default for validation$(RESET)"; \
+	fi
+	@echo ""
+	@echo -e "$(CYAN)Phase 2: Validating artifact uploads...$(RESET)"
+	@if [ -f "/tmp/playwright_suite_id" ]; then \
+		SUITE_ID=$$(cat /tmp/playwright_suite_id) $(MAKE) validate-artifacts; \
+	else \
+		$(MAKE) validate-artifacts; \
+	fi
+	@echo ""
+	@echo -e "$(GREEN)✅ Playwright tests completed with real-time API integration$(RESET)"
+
+validate-artifacts: ## Validate that failed tests have artifacts uploaded
+	@echo -e "$(BLUE)Validating artifact uploads for failed tests...$(RESET)"
+	@echo -e "$(CYAN)Step 1: Getting test suite ID...$(RESET)"
+	@if [ -n "$(SUITE_ID)" ]; then \
+		suite_id="$(SUITE_ID)"; \
+		echo -e "$(GREEN)✅ Using passed suite ID: $$suite_id$(RESET)"; \
+	else \
+		echo -e "$(YELLOW)⚠️ No suite ID provided, using default$(RESET)"; \
+		suite_id="cdf209ef-8feb-4b06-b4b9-7f31b294dacc"; \
+		echo -e "$(GREEN)✅ Using default suite: $$suite_id$(RESET)"; \
+	fi
+	@echo -e "$(CYAN)Step 2: Checking for failed test results$(RESET)"
+	@if [ -n "$(SUITE_ID)" ]; then \
+		suite_id="$(SUITE_ID)"; \
+	else \
+		suite_id="cdf209ef-8feb-4b06-b4b9-7f31b294dacc"; \
+	fi; \
+	failed_count=$$(curl -s "http://localhost:8000/playwright/test-results?suite_id=$$suite_id" | jq '.results | map(select(.status == "failed")) | length' 2>/dev/null || echo "0"); \
+	if [ "$$failed_count" = "0" ]; then \
+		echo -e "$(YELLOW)⚠️ No failed tests found - unable to validate artifact upload$(RESET)"; \
+		echo -e "$(CYAN)💡 Artifacts are only generated for failed tests$(RESET)"; \
+		echo -e "$(GREEN)✅ SKIPPED: Artifact validation (no failed tests to check)$(RESET)"; \
+	else \
+		echo -e "$(GREEN)✅ Found $$failed_count failed test(s)$(RESET)"; \
+		echo -e "$(CYAN)Step 3: Checking artifact uploads$(RESET)"; \
+		artifacts_count=$$(curl -s "http://localhost:8000/playwright/test-results?suite_id=$$suite_id" | jq '[.results[] | select(.status == "failed") | .artifacts | length] | add // 0' 2>/dev/null || echo "0"); \
+		total_artifacts=$$(curl -s "http://localhost:8000/playwright/test-results?suite_id=$$suite_id" | jq '[.results[] | .artifacts | length] | add // 0' 2>/dev/null || echo "0"); \
+		echo -e "$(CYAN)Total artifacts found: $$total_artifacts$(RESET)"; \
+		echo -e "$(CYAN)Artifacts for failed tests: $$artifacts_count$(RESET)"; \
+		echo -e "$(CYAN)Step 4: Checking MinIO storage$(RESET)"; \
+		minio_files=$$(docker exec test-results-minio sh -c 'mc ls --recursive myminio/dev-screenshot/ myminio/dev-video/ myminio/dev-trace/ 2>/dev/null | wc -l' 2>/dev/null || echo "0"); \
+		echo -e "$(CYAN)MinIO artifact files: $$minio_files$(RESET)"; \
+		echo -e "$(CYAN)Step 5: Validation Summary$(RESET)"; \
+		if [ "$$artifacts_count" -gt "0" ]; then \
+			echo -e "$(GREEN)✅ SUCCESS: Artifact upload is working!$(RESET)"; \
+			echo -e "$(GREEN)   - Failed tests: $$failed_count$(RESET)"; \
+			echo -e "$(GREEN)   - Artifacts uploaded: $$artifacts_count$(RESET)"; \
+		else \
+			echo -e "$(RED)❌ FAILED: No artifacts found for failed tests$(RESET)"; \
+			echo -e "$(YELLOW)💡 Expected behavior:$(RESET)"; \
+			echo -e "$(YELLOW)   - Failed tests should generate screenshots/videos$(RESET)"; \
+			echo -e "$(YELLOW)   - Custom reporter should upload them to API$(RESET)"; \
+			echo -e "$(YELLOW)   - API should store them in MinIO$(RESET)"; \
+			echo -e "$(CYAN)🔍 Debug: Check custom reporter logs above for upload attempts$(RESET)"; \
+			exit 1; \
+		fi; \
+	fi
+
+stop: ## Stop any running uvicorn servers on port 8000
+	@echo -e "$(BLUE)Stopping any running uvicorn servers on port 8000...$(RESET)"
+	@if lsof -ti:8000 >/dev/null 2>&1; then \
+		echo -e "$(CYAN)Found processes using port 8000, stopping them...$(RESET)"; \
+		lsof -ti:8000 | xargs kill -9 2>/dev/null || true; \
+		echo -e "$(GREEN)✅ Server stopped successfully$(RESET)"; \
+	else \
+		echo -e "$(YELLOW)No processes found running on port 8000$(RESET)"; \
+	fi
+
+download-object: ## Download object from MinIO storage (usage: make download-object object_path="path/to/object" [output="filename"])
+	@echo -e "$(BLUE)Downloading object from MinIO storage...$(RESET)"
+	@if [ -z "$(object_path)" ]; then \
+		echo -e "$(RED)❌ Error: object_path parameter is required$(RESET)"; \
+		echo -e "$(YELLOW)Usage examples:$(RESET)"; \
+		echo -e "  make download-object object_path=\"suites/suite-id/test-cases/test-id/screenshot-hash\""; \
+		echo -e "  make download-object object_path=\"suites/suite-id/test-cases/test-id/video-hash\" output=\"test-video.webm\""; \
+		echo ""; \
+		echo -e "$(CYAN)💡 Available download methods:$(RESET)"; \
+		echo -e "  1. Direct HTTP: curl http://localhost:9000/playwright/\$$object_path -o output.file"; \
+		echo -e "  2. MinIO client: docker exec test-results-minio mc cp myminio/playwright/\$$object_path /tmp/output.file"; \
+		echo -e "  3. Browser: http://localhost:9000/playwright/\$$object_path"; \
+		exit 1; \
+	fi
+	@BUCKET="playwright"; \
+	OBJECT_PATH="$(object_path)"; \
+	OUTPUT_FILE="$${output:-$$(basename "$$OBJECT_PATH")}"; \
+	echo -e "$(CYAN)Source: $$BUCKET/$$OBJECT_PATH$(RESET)"; \
+	echo -e "$(CYAN)Output: $$OUTPUT_FILE$(RESET)"; \
+	echo ""
+	@echo -e "$(CYAN)Method 1: Trying direct HTTP download...$(RESET)"
+	@BUCKET="playwright"; \
+	OBJECT_PATH="$(object_path)"; \
+	OUTPUT_FILE="$${output:-$$(basename "$$OBJECT_PATH")}"; \
+	if curl -f -s "http://localhost:9000/$$BUCKET/$$OBJECT_PATH" -o "$$OUTPUT_FILE"; then \
+		echo -e "$(GREEN)✅ HTTP download successful: $$(ls -lh "$$OUTPUT_FILE")$(RESET)"; \
+	else \
+		echo -e "$(YELLOW)⚠️ HTTP download failed, trying MinIO client...$(RESET)"; \
+		if docker exec test-results-minio mc cp "myminio/$$BUCKET/$$OBJECT_PATH" "/tmp/$$OUTPUT_FILE" 2>/dev/null; then \
+			docker cp "test-results-minio:/tmp/$$OUTPUT_FILE" "./$$OUTPUT_FILE" 2>/dev/null; \
+			if [ -f "./$$OUTPUT_FILE" ]; then \
+				echo -e "$(GREEN)✅ MinIO client download successful: $$(ls -lh "$$OUTPUT_FILE")$(RESET)"; \
+			else \
+				echo -e "$(RED)❌ Failed to copy file from container$(RESET)"; \
+				exit 1; \
+			fi; \
+		else \
+			echo -e "$(RED)❌ MinIO client download failed$(RESET)"; \
+			echo -e "$(YELLOW)💡 Check if object exists:$(RESET)"; \
+			docker exec test-results-minio mc ls --recursive "myminio/$$BUCKET/" | grep "$$OBJECT_PATH" || echo -e "$(RED)Object not found$(RESET)"; \
+			exit 1; \
+		fi; \
+	fi
+	@echo ""
+	@echo -e "$(GREEN)✅ Object downloaded successfully$(RESET)"
+	@echo -e "$(CYAN)💡 Alternative access methods:$(RESET)"
+	@echo -e "  Browser URL: http://localhost:9000/playwright/$(object_path)"
+	@echo -e "  MinIO Console: http://localhost:9001 (minio/minio123)"

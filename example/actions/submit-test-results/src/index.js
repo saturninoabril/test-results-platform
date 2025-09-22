@@ -41,22 +41,37 @@ class TestResultsSubmitter {
       core.info(`🖥️  Environment: ${this.environmentName} (${this.browser}/${this.os})`);
       core.info(`📄 Results file: ${this.resultsFile}`);
 
-      // Step 1: Ensure framework exists
-      const frameworkId = await this.ensureFramework();
-      core.setOutput('framework-id', frameworkId);
-      core.info(`✅ Framework ID: ${frameworkId}`);
+      // Step 1: Prepare framework metadata (no longer using framework entities)
+      const frameworkMetadata = {
+        name: this.frameworkName,
+        version: this.frameworkVersion,
+        source: 'github-actions',
+        created_by: process.env.GITHUB_ACTOR || 'github-actions',
+        repository: process.env.GITHUB_REPOSITORY || 'unknown',
+        run_id: process.env.GITHUB_RUN_ID || 'unknown'
+      };
+      core.info(`✅ Framework metadata: ${this.frameworkName}@${this.frameworkVersion}`);
 
-      // Step 2: Ensure environment exists
-      const environmentId = await this.ensureEnvironment();
-      core.setOutput('environment-id', environmentId);
-      core.info(`✅ Environment ID: ${environmentId}`);
+      // Step 2: Prepare environment metadata (environments may still exist but referenced by metadata)
+      const environmentMetadata = {
+        name: this.environmentName,
+        browser: this.browser,
+        os: this.os,
+        source: 'github-actions',
+        created_by: process.env.GITHUB_ACTOR || 'github-actions',
+        repository: process.env.GITHUB_REPOSITORY || 'unknown',
+        run_id: process.env.GITHUB_RUN_ID || 'unknown',
+        runner_os: process.env.RUNNER_OS || 'unknown',
+        runner_arch: process.env.RUNNER_ARCH || 'unknown'
+      };
+      core.info(`✅ Environment metadata: ${this.environmentName}`);
 
       // Step 3: Parse test results
       const resultsData = await this.parseResults();
       core.info(`📊 Parsed ${resultsData.results.length} test results`);
 
-      // Step 4: Create test suite
-      const suiteId = await this.createSuite(frameworkId, environmentId, resultsData);
+      // Step 4: Create test suite with metadata instead of IDs
+      const suiteId = await this.createSuite(frameworkMetadata, environmentMetadata, resultsData);
       core.setOutput('suite-id', suiteId);
       core.info(`✅ Suite ID: ${suiteId}`);
 
@@ -81,78 +96,11 @@ class TestResultsSubmitter {
     }
   }
 
-  async ensureFramework() {
-    try {
-      // First, try to find existing framework
-      const existingFrameworks = await this.apiRequest('GET', '/api/v1/frameworks');
-      const existing = existingFrameworks.find(f =>
-        f.name === this.frameworkName && f.version === this.frameworkVersion
-      );
+  // Framework entities removed - framework info now stored in suite metadata
+  // This method is no longer needed but kept for reference
 
-      if (existing) {
-        core.info(`📋 Using existing framework: ${existing.name}@${existing.version}`);
-        return existing.id;
-      }
-
-      // Create new framework if not found
-      const frameworkData = {
-        name: this.frameworkName,
-        version: this.frameworkVersion,
-        metadata: {
-          source: 'github-actions',
-          created_by: process.env.GITHUB_ACTOR || 'github-actions',
-          repository: process.env.GITHUB_REPOSITORY || 'unknown',
-          run_id: process.env.GITHUB_RUN_ID || 'unknown'
-        }
-      };
-
-      const response = await this.apiRequest('POST', '/api/v1/frameworks', frameworkData);
-      core.info(`📋 Created new framework: ${response.name}@${response.version}`);
-      return response.id;
-
-    } catch (error) {
-      throw new Error(`Failed to ensure framework: ${error.message}`);
-    }
-  }
-
-  async ensureEnvironment() {
-    try {
-      // First, try to find existing environment
-      const existingEnvironments = await this.apiRequest('GET', '/api/v1/environments');
-      const existing = existingEnvironments.find(e =>
-        e.name === this.environmentName &&
-        e.browser === this.browser &&
-        e.os === this.os
-      );
-
-      if (existing) {
-        core.info(`🖥️  Using existing environment: ${existing.name}`);
-        return existing.id;
-      }
-
-      // Create new environment if not found
-      const environmentData = {
-        name: this.environmentName,
-        browser: this.browser,
-        os: this.os,
-        metadata: {
-          source: 'github-actions',
-          created_by: process.env.GITHUB_ACTOR || 'github-actions',
-          repository: process.env.GITHUB_REPOSITORY || 'unknown',
-          run_id: process.env.GITHUB_RUN_ID || 'unknown',
-          runner_os: process.env.RUNNER_OS || 'unknown',
-          runner_arch: process.env.RUNNER_ARCH || 'unknown'
-        }
-      };
-
-      const response = await this.apiRequest('POST', '/api/v1/environments', environmentData);
-      core.info(`🖥️  Created new environment: ${response.name}`);
-      return response.id;
-
-    } catch (error) {
-      throw new Error(`Failed to ensure environment: ${error.message}`);
-    }
-  }
+  // Environment entities may still exist but are referenced via metadata
+  // This method is no longer used in the main flow but kept for reference
 
   async parseResults() {
     try {
@@ -271,18 +219,21 @@ class TestResultsSubmitter {
     };
   }
 
-  async createSuite(frameworkId, environmentId, resultsData) {
+  async createSuite(frameworkMetadata, environmentMetadata, resultsData) {
     try {
       const suiteData = {
-        framework_id: frameworkId,
-        environment_id: environmentId,
         name: this.suiteName,
         total_count: resultsData.stats.total,
         passed_count: resultsData.stats.passed,
         failed_count: resultsData.stats.failed,
         skipped_count: resultsData.stats.skipped,
         duration_ms: resultsData.results.reduce((sum, r) => sum + (r.duration_ms || 0), 0),
-        metadata: {
+        // Framework info now stored in framework_metadata
+        framework_metadata: frameworkMetadata,
+        // Environment info now stored in environment_metadata
+        environment_metadata: environmentMetadata,
+        // CI/CD info stored in ci_run_metadata
+        ci_run_metadata: {
           source: 'github-actions',
           repository: process.env.GITHUB_REPOSITORY || 'unknown',
           run_id: process.env.GITHUB_RUN_ID || 'unknown',

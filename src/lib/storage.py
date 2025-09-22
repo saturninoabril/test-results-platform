@@ -33,7 +33,6 @@ class StorageInterface(ABC):
         file_obj: IO[bytes],
         storage_key: str,
         content_type: str,
-        metadata: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Upload file to storage."""
         pass
@@ -204,7 +203,6 @@ class StorageClient(StorageInterface):
         file_obj: IO[bytes],
         storage_key: str,
         content_type: str,
-        metadata: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Upload file to storage with checksum validation and multipart support."""
         bucket_name, object_key = self._parse_storage_key(storage_key)
@@ -218,8 +216,6 @@ class StorageClient(StorageInterface):
             "checksum-sha256": checksum,
             "uploaded-at": datetime.utcnow().isoformat(),
         }
-        if metadata:
-            upload_metadata.update(metadata)
 
         # Get file size
         file_obj.seek(0, 2)  # Seek to end
