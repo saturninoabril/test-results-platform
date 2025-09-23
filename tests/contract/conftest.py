@@ -27,11 +27,11 @@ async def setup_services():
 
     async with get_session() as session:
         # Delete data in dependency order (children first, then parents)
+        await session.execute(text("DELETE FROM test_events"))
         await session.execute(text("DELETE FROM test_artifacts"))
+        await session.execute(text("DELETE FROM playwright_test_results"))
         await session.execute(text("DELETE FROM test_results"))
         await session.execute(text("DELETE FROM test_suites"))
-        await session.execute(text("DELETE FROM test_environments"))
-        await session.execute(text("DELETE FROM test_frameworks"))
         await session.commit()
 
     yield

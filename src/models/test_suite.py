@@ -5,20 +5,56 @@ Represents a collection of tests executed together with summary statistics.
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .test_environment import TestEnvironment
-    from .test_framework import TestFramework
-    from .test_result import TestResult
+    from .playwright_test_result import PlaywrightTestResult
+    from .test_event import TestEvent
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import CheckConstraint, DateTime, Index, Integer, String
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from .base import BaseModel
+
+
+class SuiteStatus(str, Enum):
+    """Test suite execution status enumeration."""
+
+    CREATED = "created"
+    RUNNING = "running"
+    PASSED = "passed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    INTERRUPTED = "interrupted"
+
+    @classmethod
+    def normalize(cls, status: str) -> SuiteStatus:
+        """Normalize status input to match database enum values."""
+        # Handle direct matches first
+        for enum_value in cls:
+            if enum_value.value == status:
+                return enum_value
+
+        # Handle case-insensitive matches
+        status_lower = status.lower()
+        if status_lower == "created":
+            return cls.CREATED
+        elif status_lower == "running":
+            return cls.RUNNING
+        elif status_lower == "passed":
+            return cls.PASSED
+        elif status_lower == "failed":
+            return cls.FAILED
+        elif status_lower == "cancelled":
+            return cls.CANCELLED
+        elif status_lower == "interrupted":
+            return cls.INTERRUPTED
+        else:
+            raise ValueError(f"Invalid suite status: {status}")
 
 
 class TestSuite(BaseModel):
@@ -30,20 +66,6 @@ class TestSuite(BaseModel):
         String(200),
         nullable=False,
         comment="Test suite name",
-    )
-
-    framework_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("test_frameworks.id", ondelete="RESTRICT"),
-        nullable=False,
-        comment="Foreign key to test framework",
-    )
-
-    environment_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("test_environments.id", ondelete="RESTRICT"),
-        nullable=False,
-        comment="Foreign key to test environment",
     )
 
     total_tests: Mapped[int] = mapped_column(
@@ -93,19 +115,69 @@ class TestSuite(BaseModel):
         comment="Suite execution completion time",
     )
 
-    config_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+    # Framework-specific metadata (e.g., Playwright)
+    # name: Playwright, version: 1.20.0, config: {...}
+    framework_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
-        comment="Suite-specific metadata and configuration",
+        comment="Suite-specific framework metadata and configuration",
+    )
+
+    # Environment metadata (e.g., OS, arch, Node.js version)
+    environment_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Suite-specific environment metadata and configuration",
+    )
+
+    # Server metadata (e.g., server: enterprise edition, version: 11.0.0, license: true, ...)
+    server_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Suite-specific server metadata and configuration",
+    )
+
+    # CI run metadata (e.g., ci: github_actions, workflow: test, run_number: 123, job_id: 123, full_repo: org/repo_name, branch: main, commit_sha: abcdef123456, pr_number: 45, ...)
+    ci_run_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Suite-specific CI run metadata and configuration",
+    )
+
+    # Playwright-specific test files metadata
+    playwright_test_files: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Suite-specific Playwright test files",
+    )
+
+    start_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Alternative start time for Playwright compatibility",
+    )
+
+    end_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Alternative end time for Playwright compatibility",
+    )
+
+    status: Mapped[str | None] = mapped_column(
+        SQLEnum(SuiteStatus, name="suite_status", native_enum=False),
+        nullable=True,
+        comment="Suite execution status",
     )
 
     # Relationships
-    framework: Mapped[TestFramework] = relationship("TestFramework", lazy="select")
 
-    environment: Mapped[TestEnvironment] = relationship("TestEnvironment", lazy="select")
+    # Framework-specific test results relationships
+    playwright_test_results: Mapped[list[PlaywrightTestResult]] = relationship(
+        "PlaywrightTestResult", back_populates="suite", cascade="all, delete-orphan", lazy="select"
+    )
 
-    test_results: Mapped[list[TestResult]] = relationship(
-        "TestResult", back_populates="suite", cascade="all, delete-orphan", lazy="select"
+    test_events: Mapped[list[TestEvent]] = relationship(
+        "TestEvent", back_populates="suite", cascade="all, delete-orphan", lazy="select"
     )
 
     # Constraints and indexes
@@ -116,17 +188,12 @@ class TestSuite(BaseModel):
         CheckConstraint("skipped_tests >= 0", name="ck_skipped_tests_non_negative"),
         CheckConstraint("duration_ms >= 0", name="ck_duration_non_negative"),
         CheckConstraint("completed_at >= started_at", name="ck_completion_after_start"),
-        CheckConstraint(
-            "total_tests = passed_tests + failed_tests + skipped_tests",
-            name="ck_test_counts_consistent",
-        ),
-        Index("ix_test_suites_framework_id", "framework_id"),
-        Index("ix_test_suites_environment_id", "environment_id"),
         Index("ix_test_suites_started_at", "started_at"),
         Index("ix_test_suites_completed_at", "completed_at"),
         Index("ix_test_suites_name", "name"),
-        Index("ix_test_suites_framework_started", "framework_id", "started_at"),
-        Index("ix_test_suites_environment_started", "environment_id", "started_at"),
+        Index("ix_test_suites_status", "status"),
+        Index("ix_test_suites_start_time", "start_time"),
+        Index("ix_test_suites_end_time", "end_time"),
     )
 
     @validates("name")
@@ -161,18 +228,14 @@ class TestSuite(BaseModel):
             raise ValueError(f"{key} cannot be None")
         return timestamp
 
-    @validates("config_metadata")
-    def validate_config_metadata(
-        self, key: str, config_metadata: dict[str, Any] | None
-    ) -> dict[str, Any] | None:
-        """Validate config_metadata is a proper dictionary."""
-        if config_metadata is None:
+    @validates("start_time", "end_time")
+    def validate_playwright_timestamps(
+        self, key: str, timestamp: datetime | None
+    ) -> datetime | None:
+        """Validate Playwright timestamp values."""
+        if timestamp is None:
             return None
-
-        if not isinstance(config_metadata, dict):
-            raise ValueError("Config metadata must be a dictionary")
-
-        return config_metadata
+        return timestamp
 
     def validate_consistency(self) -> None:
         """Validate internal consistency of test counts and timing."""
@@ -181,7 +244,11 @@ class TestSuite(BaseModel):
             raise ValueError("Total tests must equal sum of passed, failed, and skipped tests")
 
         # Check timing consistency
-        if self.completed_at < self.started_at:
+        if (
+            self.completed_at is not None
+            and self.started_at is not None
+            and self.completed_at < self.started_at
+        ):
             raise ValueError("Completion time cannot be before start time")
 
     @property
@@ -195,6 +262,26 @@ class TestSuite(BaseModel):
     def duration_seconds(self) -> float:
         """Get duration in seconds."""
         return self.duration_ms / 1000.0
+
+    @property
+    def is_running(self) -> bool:
+        """Check if suite is currently running."""
+        return self.status == SuiteStatus.RUNNING
+
+    @property
+    def is_completed(self) -> bool:
+        """Check if suite has completed (passed, failed, or cancelled)."""
+        return self.status in (SuiteStatus.PASSED, SuiteStatus.FAILED, SuiteStatus.CANCELLED)
+
+    @property
+    def effective_start_time(self) -> datetime:
+        """Get the effective start time, preferring start_time over started_at."""
+        return self.start_time if self.start_time is not None else self.started_at
+
+    @property
+    def effective_end_time(self) -> datetime:
+        """Get the effective end time, preferring end_time over completed_at."""
+        return self.end_time if self.end_time is not None else self.completed_at
 
     def __str__(self) -> str:
         """String representation."""

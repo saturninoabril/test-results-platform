@@ -1,0 +1,640 @@
+openapi: 3.0.0
+info:
+  title: Test Results Platform - Playwright Integration API
+  version: 1.0.0
+  description: Extended API endpoints to support Playwright custom reporter integration with real-time test result submission
+
+servers:
+  - url: https://api.test-results-platform.com/v1
+    description: Production server
+  - url: http://localhost:8000/v1
+    description: Development server
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    PlaywrightTestSuite:
+      type: object
+      required: [name, framework, version, test_count, status, start_time]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          example: "Playwright E2E Test Suite - 2025-09-20T10:30:00Z"
+        framework:
+          type: string
+          enum: [playwright]
+          example: playwright
+        version:
+          type: string
+          example: "1.55.0"
+        test_count:
+          type: integer
+          minimum: 0
+          example: 150
+        status:
+          type: string
+          enum: [created, running, passed, failed, interrupted]
+          example: running
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+          nullable: true
+        duration:
+          type: integer
+          nullable: true
+          description: Duration in milliseconds
+        metadata:
+          type: object
+          properties:
+            playwright:
+              type: object
+              properties:
+                workers:
+                  type: integer
+                fullyParallel:
+                  type: boolean
+                retries:
+                  type: integer
+                timeout:
+                  type: integer
+                projects:
+                  type: array
+                  items:
+                    type: string
+
+    PlaywrightTestEnvironment:
+      type: object
+      required: [name, browser_name, os]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          example: "Desktop Chrome"
+        browser_name:
+          type: string
+          enum: [chromium, firefox, webkit]
+          example: chromium
+        browser_version:
+          type: string
+          example: "118.0.5993.70"
+        os:
+          type: string
+          example: "linux"
+        viewport:
+          type: object
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+        device_name:
+          type: string
+          nullable: true
+          example: "iPhone 12"
+        metadata:
+          type: object
+          properties:
+            playwright:
+              type: object
+              properties:
+                deviceScaleFactor:
+                  type: number
+                isMobile:
+                  type: boolean
+                hasTouch:
+                  type: boolean
+                colorScheme:
+                  type: string
+                  enum: [light, dark]
+
+    PlaywrightTestResult:
+      type: object
+      required: [suite_id, environment_id, title, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        suite_id:
+          type: string
+          format: uuid
+        environment_id:
+          type: string
+          format: uuid
+        external_id:
+          type: string
+          example: "test-auth-login-chrome"
+        title:
+          type: string
+          example: "should login successfully"
+        full_title:
+          type: string
+          example: "Authentication › Login › should login successfully"
+        status:
+          type: string
+          enum: [pending, running, passed, failed, skipped, flaky, retrying]
+        duration:
+          type: integer
+          nullable: true
+          description: Duration in milliseconds
+        retry_count:
+          type: integer
+          minimum: 0
+          default: 0
+        project_name:
+          type: string
+          example: "Desktop Chrome"
+        timeout:
+          type: integer
+          description: Test timeout in milliseconds
+        error_message:
+          type: string
+          nullable: true
+        location:
+          type: object
+          properties:
+            file:
+              type: string
+              example: "./tests/auth.spec.ts"
+            line:
+              type: integer
+              example: 15
+            column:
+              type: integer
+              example: 3
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["smoke", "auth"]
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          properties:
+            playwright:
+              type: object
+              properties:
+                testId:
+                  type: string
+                workerIndex:
+                  type: integer
+                parallelIndex:
+                  type: integer
+                annotations:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      description:
+                        type: string
+
+    PlaywrightTestArtifact:
+      type: object
+      required: [test_result_id, type, filename, storage_path]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        test_result_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [screenshot, video, trace, logs]
+        filename:
+          type: string
+          example: "login-test-screenshot.png"
+        storage_path:
+          type: string
+          example: "artifacts/2025/09/20/login-test-screenshot.png"
+        file_size:
+          type: integer
+          example: 45632
+        content_type:
+          type: string
+          example: "image/png"
+        download_url:
+          type: string
+          format: uri
+          readOnly: true
+        metadata:
+          type: object
+          properties:
+            playwright:
+              type: object
+              properties:
+                attachmentName:
+                  type: string
+                captureTime:
+                  type: string
+                  format: date-time
+                testStep:
+                  type: string
+                viewport:
+                  type: object
+
+    TestEvent:
+      type: object
+      required: [suite_id, event_type, timestamp]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        suite_id:
+          type: string
+          format: uuid
+        test_external_id:
+          type: string
+          nullable: true
+        event_type:
+          type: string
+          enum: [test_started, test_ended, suite_started, suite_ended, error]
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          type: object
+          description: Event-specific data payload
+
+    ArtifactUploadRequest:
+      type: object
+      required: [filename, content_type, artifact_type]
+      properties:
+        filename:
+          type: string
+          example: "login-test-trace.zip"
+        content_type:
+          type: string
+          example: "application/zip"
+        artifact_type:
+          type: string
+          enum: [screenshot, video, trace, logs]
+        file_size:
+          type: integer
+          example: 1048576
+
+    PresignedUploadResponse:
+      type: object
+      properties:
+        upload_url:
+          type: string
+          format: uri
+          description: Pre-signed URL for uploading to S3
+        download_url:
+          type: string
+          format: uri
+          description: URL for downloading the artifact after upload
+        expires_at:
+          type: string
+          format: date-time
+        storage_path:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+paths:
+  /playwright/suites:
+    post:
+      summary: Create a new test suite
+      tags: [Playwright]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaywrightTestSuite'
+      responses:
+        '201':
+          description: Test suite created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaywrightTestSuite'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /playwright/suites/{suite_id}:
+    put:
+      summary: Update test suite status and metadata
+      tags: [Playwright]
+      parameters:
+        - name: suite_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [running, passed, failed, interrupted]
+                end_time:
+                  type: string
+                  format: date-time
+                duration:
+                  type: integer
+      responses:
+        '200':
+          description: Test suite updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaywrightTestSuite'
+        '404':
+          description: Test suite not found
+
+  /playwright/environments:
+    post:
+      summary: Create a new test environment
+      tags: [Playwright]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaywrightTestEnvironment'
+      responses:
+        '201':
+          description: Test environment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaywrightTestEnvironment'
+
+  /playwright/test-results:
+    post:
+      summary: Create a new test result
+      tags: [Playwright]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaywrightTestResult'
+      responses:
+        '201':
+          description: Test result created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaywrightTestResult'
+
+    get:
+      summary: Get test results for a suite
+      tags: [Playwright]
+      parameters:
+        - name: suite_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, passed, failed, skipped, flaky]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of test results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlaywrightTestResult'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+  /playwright/test-results/{external_id}:
+    put:
+      summary: Update test result by external ID
+      tags: [Playwright]
+      parameters:
+        - name: external_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: suite_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [running, passed, failed, skipped, flaky, retrying]
+                duration:
+                  type: integer
+                end_time:
+                  type: string
+                  format: date-time
+                error_message:
+                  type: string
+                retry_count:
+                  type: integer
+      responses:
+        '200':
+          description: Test result updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaywrightTestResult'
+
+  /playwright/artifacts/presigned-upload:
+    post:
+      summary: Get presigned URL for artifact upload
+      tags: [Playwright]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArtifactUploadRequest'
+      responses:
+        '200':
+          description: Presigned upload URL generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignedUploadResponse'
+
+  /playwright/test-results/{test_result_id}/artifacts:
+    post:
+      summary: Register artifact after successful upload
+      tags: [Playwright]
+      parameters:
+        - name: test_result_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaywrightTestArtifact'
+      responses:
+        '201':
+          description: Artifact registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaywrightTestArtifact'
+
+  /playwright/events:
+    post:
+      summary: Create a real-time test event
+      tags: [Playwright]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestEvent'
+      responses:
+        '201':
+          description: Event created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestEvent'
+
+    get:
+      summary: Get real-time events for a suite
+      tags: [Playwright]
+      parameters:
+        - name: suite_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: event_type
+          in: query
+          schema:
+            type: string
+            enum: [test_started, test_ended, suite_started, suite_ended, error]
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Only return events after this timestamp
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+      responses:
+        '200':
+          description: List of test events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TestEvent'
+                  total:
+                    type: integer
+
+  /health:
+    get:
+      summary: Health check endpoint
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  timestamp:
+                    type: string
+                    format: date-time

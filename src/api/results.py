@@ -10,8 +10,6 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
 
 from ..lib.middleware import RequireResultsDelete, RequireResultsRead, RequireResultsWrite
-from ..services.environment_service import EnvironmentService
-from ..services.framework_service import FrameworkService
 from ..services.notification_service import get_notification_service
 from ..services.result_service import (
     ResultNotFoundError,
@@ -61,11 +59,11 @@ async def create_result(request: ResultCreateRequest) -> ResultResponse:
                     if test_result_model:
                         # Get related suite and framework/environment info
                         suite_response = await SuiteService.get_suite(result.suite_id)
-                        framework_response = await FrameworkService.get_framework(
-                            suite_response.framework_id
-                        )
-                        environment_response = await EnvironmentService.get_environment(
-                            suite_response.environment_id
+                        # Get framework info from suite metadata
+                        framework_name = (
+                            suite_response.framework_metadata.get("name", "unknown")
+                            if suite_response.framework_metadata
+                            else "unknown"
                         )
 
                         # Get the actual TestSuite model
@@ -74,8 +72,8 @@ async def create_result(request: ResultCreateRequest) -> ResultResponse:
                             await notification_service.notify_test_failure(
                                 test_result=test_result_model,
                                 suite=test_suite_model,
-                                framework_name=framework_response.name,
-                                environment_name=environment_response.name,
+                                framework_name=framework_name,
+                                environment_name="unknown",  # No environment data
                             )
                             logger.debug("Test failure notification sent", result_id=str(result.id))
             except Exception as notify_error:
@@ -130,11 +128,11 @@ async def create_results_bulk(requests: list[ResultCreateRequest]) -> list[Resul
                 async with get_session() as session:
                     for suite_id, suite_failed_results in suite_failures.items():
                         suite_response = await SuiteService.get_suite(suite_id)
-                        framework_response = await FrameworkService.get_framework(
-                            suite_response.framework_id
-                        )
-                        environment_response = await EnvironmentService.get_environment(
-                            suite_response.environment_id
+                        # Get framework info from suite metadata
+                        framework_name = (
+                            suite_response.framework_metadata.get("name", "unknown")
+                            if suite_response.framework_metadata
+                            else "unknown"
                         )
 
                         # Get actual database models
@@ -155,8 +153,8 @@ async def create_results_bulk(requests: list[ResultCreateRequest]) -> list[Resul
                                     await notification_service.notify_bulk_failure_analysis(
                                         failed_results=test_result_models,
                                         suite_name=suite_response.name,
-                                        framework_name=framework_response.name,
-                                        environment_name=environment_response.name,
+                                        framework_name=framework_name,
+                                        environment_name="unknown",  # No environment data
                                     )
                             else:
                                 # Single failure notification
@@ -167,8 +165,8 @@ async def create_results_bulk(requests: list[ResultCreateRequest]) -> list[Resul
                                     await notification_service.notify_test_failure(
                                         test_result=test_result_model,
                                         suite=test_suite_model,
-                                        framework_name=framework_response.name,
-                                        environment_name=environment_response.name,
+                                        framework_name=framework_name,
+                                        environment_name="unknown",  # No environment data
                                     )
 
                 logger.debug("Bulk failure notifications sent", failed_count=len(failed_results))

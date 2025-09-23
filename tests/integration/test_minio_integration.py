@@ -96,7 +96,6 @@ async def test_basic_file_operations():
         file_obj=file_obj,
         storage_key=storage_key,
         content_type="text/plain",
-        metadata={"test": "basic_upload", "size": "small"},
     )
 
     assert "storage_key" in upload_result
@@ -144,7 +143,6 @@ async def test_multipart_upload():
         file_obj=large_file,
         storage_key=storage_key,
         content_type="application/octet-stream",
-        metadata={"test": "multipart_upload", "original_size": str(original_size)},
     )
 
     upload_time = time.time() - start_time
@@ -218,7 +216,6 @@ async def test_signed_urls():
         file_obj=test_file,
         storage_key=storage_key,
         content_type="image/png",
-        metadata={"test": "signed_url", "type": "image"},
     )
 
     # Generate signed URL
@@ -293,7 +290,6 @@ async def test_bulk_operations():
             file_obj=file_obj,
             storage_key=storage_key,
             content_type="text/plain",
-            metadata={"batch": "bulk_test", "index": storage_key.split("-")[-1].split(".")[0]},
         )
         uploaded_files.append(result["storage_key"])
 
@@ -332,7 +328,6 @@ async def test_cleanup_operations():
             file_obj=file_obj,
             storage_key=storage_key,
             content_type="text/plain",
-            metadata={"temp": "true", "test": "cleanup"},
         )
         cleanup_files.append(storage_key)
 
@@ -434,7 +429,6 @@ async def test_file_types_and_content_types():
             file_obj=file_obj,
             storage_key=storage_key,
             content_type=content_type,
-            metadata={"file_type": content_type.split("/")[0]},
         )
 
         uploaded_files.append((storage_key, content_type, content))

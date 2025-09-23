@@ -25,48 +25,7 @@ The API uses Bearer token authentication with JWT tokens. Two types of tokens ar
 - Scoped permissions (read, write, admin)
 - Can be revoked independently
 
-```bash
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-     https://api.testresults.dev/v1/frameworks
-```
-
 ## Core Entities
-
-### TestFramework
-Represents testing frameworks like Playwright or Cypress.
-
-```json
-{
-  "id": "playwright-1.55.0",
-  "name": "Playwright",
-  "version": "1.55.0",
-  "metadata": {
-    "supports_parallel": true,
-    "artifact_types": ["screenshot", "video", "trace"]
-  },
-  "created_at": "2024-01-15T10:00:00Z",
-  "updated_at": "2024-01-15T10:00:00Z"
-}
-```
-
-### TestEnvironment
-Defines the execution context for tests.
-
-```json
-{
-  "id": "chrome-ubuntu-ci",
-  "name": "Chrome on Ubuntu (CI)",
-  "browser": "chromium",
-  "os": "ubuntu-latest",
-  "metadata": {
-    "headless": true,
-    "viewport": "1280x720",
-    "ci_environment": "github-actions"
-  },
-  "created_at": "2024-01-15T10:00:00Z",
-  "updated_at": "2024-01-15T10:00:00Z"
-}
-```
 
 ### TestSuite
 Groups related test results from a single execution.
@@ -76,8 +35,6 @@ Groups related test results from a single execution.
   "id": "suite-123",
   "external_id": "github-run-456789",
   "name": "Login Flow Tests",
-  "framework_id": "playwright-1.55.0",
-  "environment_id": "chrome-ubuntu-ci",
   "status": "completed",
   "total_tests": 15,
   "passed": 13,
@@ -141,63 +98,6 @@ Files generated during test execution.
 
 ## Endpoints
 
-### Frameworks
-
-#### List Frameworks
-```http
-GET /v1/frameworks
-```
-
-Query Parameters:
-- `limit`: Number of items to return (default: 50, max: 100)
-- `offset`: Number of items to skip (default: 0)
-- `name`: Filter by framework name
-
-#### Get Framework
-```http
-GET /v1/frameworks/{framework_id}
-```
-
-#### Create Framework
-```http
-POST /v1/frameworks
-Content-Type: application/json
-
-{
-  "id": "cypress-13.0.0",
-  "name": "Cypress",
-  "version": "13.0.0",
-  "metadata": {
-    "supports_parallel": false,
-    "artifact_types": ["screenshot", "video"]
-  }
-}
-```
-
-### Environments
-
-#### List Environments
-```http
-GET /v1/environments
-```
-
-#### Create Environment
-```http
-POST /v1/environments
-Content-Type: application/json
-
-{
-  "id": "firefox-macos-local",
-  "name": "Firefox on macOS (Local)",
-  "browser": "firefox",
-  "os": "macOS",
-  "metadata": {
-    "headless": false,
-    "viewport": "1920x1080"
-  }
-}
-```
-
 ### Test Suites
 
 #### List Test Suites
@@ -206,8 +106,6 @@ GET /v1/suites
 ```
 
 Query Parameters:
-- `framework_id`: Filter by framework
-- `environment_id`: Filter by environment
 - `status`: Filter by status (pending, running, completed, failed)
 - `started_after`: ISO datetime filter
 - `started_before`: ISO datetime filter
@@ -220,8 +118,6 @@ Content-Type: application/json
 {
   "external_id": "github-run-456789",
   "name": "E2E Test Suite",
-  "framework_id": "playwright-1.55.0",
-  "environment_id": "chrome-ubuntu-ci",
   "metadata": {
     "commit_sha": "abc123def456",
     "branch": "main",

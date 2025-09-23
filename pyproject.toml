@@ -47,6 +47,7 @@ dependencies = [
     # CLI dependencies
     "click==8.2.1",
     "rich==14.1.0", # CLI formatting
+    "aiosqlite>=0.21.0",
 ]
 
 [project.optional-dependencies]

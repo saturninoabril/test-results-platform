@@ -8,9 +8,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from .playwright_test_result import PlaywrightTestResult
     from .test_result import TestResult
     from .test_suite import TestSuite
 
@@ -26,7 +27,7 @@ from sqlalchemy import (
 from sqlalchemy import (
     Enum as SQLEnum,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from .base import BaseModel
@@ -49,6 +50,14 @@ class TestArtifact(BaseModel):
     __tablename__ = "test_artifacts"
 
     # Foreign key relationships (one of these must be set)
+    playwright_result_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("playwright_test_results.id", ondelete="CASCADE"),
+        nullable=True,
+        comment="Foreign key to Playwright test result (for result-level artifacts)",
+    )
+
+    # Legacy - remove after migration
     result_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("test_results.id", ondelete="CASCADE"),
@@ -64,8 +73,8 @@ class TestArtifact(BaseModel):
     )
 
     # Artifact metadata
-    artifact_type: Mapped[ArtifactType] = mapped_column(
-        SQLEnum(ArtifactType, name="artifact_type"),
+    artifact_type: Mapped[str] = mapped_column(
+        SQLEnum(ArtifactType, name="artifact_type", native_enum=False),
         nullable=False,
         comment="Type of artifact",
     )
@@ -115,13 +124,31 @@ class TestArtifact(BaseModel):
         comment="Expiration time for automatic cleanup",
     )
 
-    config_metadata: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB,
+    # Playwright-specific fields
+    capture_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
-        comment="Artifact-specific metadata",
+        comment="When the artifact was captured during test execution",
+    )
+
+    test_step: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Test step or action when artifact was captured",
+    )
+
+    content_type: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Alternative content type field for Playwright compatibility",
     )
 
     # Relationships
+    playwright_test_result: Mapped[PlaywrightTestResult | None] = relationship(
+        "PlaywrightTestResult", back_populates="test_artifacts", lazy="select"
+    )
+
+    # Legacy - remove after migration
     test_result: Mapped[TestResult | None] = relationship(
         "TestResult", back_populates="test_artifacts", lazy="select"
     )
@@ -132,36 +159,42 @@ class TestArtifact(BaseModel):
     __table_args__ = (
         # Ensure exactly one parent is set
         CheckConstraint(
-            "(result_id IS NOT NULL AND suite_id IS NULL) OR "
-            "(result_id IS NULL AND suite_id IS NOT NULL)",
+            "(playwright_result_id IS NOT NULL AND result_id IS NULL AND suite_id IS NULL) OR "
+            "(playwright_result_id IS NULL AND result_id IS NOT NULL AND suite_id IS NULL) OR "
+            "(playwright_result_id IS NULL AND result_id IS NULL AND suite_id IS NOT NULL)",
             name="ck_artifact_has_one_parent",
         ),
         CheckConstraint("file_size > 0", name="ck_file_size_positive"),
         CheckConstraint("file_size <= 104857600", name="ck_file_size_limit_100mb"),
         CheckConstraint("length(checksum) = 64", name="ck_checksum_sha256_length"),
         UniqueConstraint("storage_key", name="uq_artifact_storage_key"),
+        Index("ix_test_artifacts_playwright_result_id", "playwright_result_id"),
         Index("ix_test_artifacts_result_id", "result_id"),
         Index("ix_test_artifacts_suite_id", "suite_id"),
         Index("ix_test_artifacts_artifact_type", "artifact_type"),
         Index("ix_test_artifacts_expires_at", "expires_at"),
+        Index("ix_test_artifacts_playwright_result_type", "playwright_result_id", "artifact_type"),
         Index("ix_test_artifacts_result_type", "result_id", "artifact_type"),
         Index("ix_test_artifacts_suite_type", "suite_id", "artifact_type"),
+        Index("ix_test_artifacts_capture_time", "capture_time"),
+        Index("ix_test_artifacts_test_step", "test_step"),
+        Index("ix_test_artifacts_content_type", "content_type"),
     )
 
     # Allowed MIME types for validation
-    ALLOWED_MIME_TYPES = {
-        ArtifactType.SCREENSHOT: ["image/png", "image/jpeg", "image/gif", "image/webp"],
-        ArtifactType.VIDEO: ["video/mp4", "video/webm", "video/avi", "video/mov"],
-        ArtifactType.REPORT: [
+    ALLOWED_MIME_TYPES: dict[str, list[str]] = {
+        ArtifactType.SCREENSHOT.value: ["image/png", "image/jpeg", "image/gif", "image/webp"],
+        ArtifactType.VIDEO.value: ["video/mp4", "video/webm", "video/avi", "video/mov"],
+        ArtifactType.REPORT.value: [
             "text/html",
             "application/json",
             "application/xml",
             "text/plain",
             "application/pdf",
         ],
-        ArtifactType.LOG: ["text/plain", "application/json", "text/csv"],
-        ArtifactType.TRACE: ["application/json", "text/plain", "application/octet-stream"],
-        ArtifactType.OTHER: [
+        ArtifactType.LOG.value: ["text/plain", "application/json", "text/csv"],
+        ArtifactType.TRACE.value: ["application/json", "text/plain", "application/octet-stream"],
+        ArtifactType.OTHER.value: [
             # Allow any MIME type for "other" artifacts
         ],
     }
@@ -241,38 +274,76 @@ class TestArtifact(BaseModel):
 
         return checksum
 
-    @validates("config_metadata")
-    def validate_config_metadata(
-        self, key: str, config_metadata: dict[str, Any] | None
-    ) -> dict[str, Any] | None:
-        """Validate config_metadata is a proper dictionary."""
-        if config_metadata is None:
+    @validates("capture_time")
+    def validate_capture_time(self, key: str, capture_time: datetime | None) -> datetime | None:
+        """Validate capture time."""
+        if capture_time is None:
+            return None
+        return capture_time
+
+    @validates("test_step")
+    def validate_test_step(self, key: str, test_step: str | None) -> str | None:
+        """Validate test step description."""
+        if test_step is None:
             return None
 
-        if not isinstance(config_metadata, dict):
-            raise ValueError("Config metadata must be a dictionary")
+        test_step = test_step.strip()
+        if not test_step:
+            return None
 
-        return config_metadata
+        if len(test_step) > 500:
+            raise ValueError("Test step cannot exceed 500 characters")
+
+        return test_step
+
+    @validates("content_type")
+    def validate_content_type(self, key: str, content_type: str | None) -> str | None:
+        """Validate alternative content type field."""
+        if content_type is None:
+            return None
+
+        content_type = content_type.strip().lower()
+        if not content_type:
+            return None
+
+        # Basic MIME type format validation
+        if "/" not in content_type:
+            raise ValueError("Content type must be in format 'type/subtype'")
+
+        if len(content_type) > 100:
+            raise ValueError("Content type cannot exceed 100 characters")
+
+        return content_type
 
     def validate_mime_type_for_artifact_type(self) -> None:
         """Validate MIME type is appropriate for artifact type."""
-        if self.artifact_type == ArtifactType.OTHER:
+        if self.artifact_type == ArtifactType.OTHER.value:
             return  # Allow any MIME type for "other"
 
         allowed_types = self.ALLOWED_MIME_TYPES.get(self.artifact_type, [])
         if allowed_types and self.mime_type not in allowed_types:
             raise ValueError(
-                f"MIME type '{self.mime_type}' not allowed for artifact type '{self.artifact_type.value}'. "
+                f"MIME type '{self.mime_type}' not allowed for artifact type '{self.artifact_type}'. "
                 f"Allowed types: {allowed_types}"
             )
 
     def validate_parent_relationship(self) -> None:
         """Validate exactly one parent relationship is set."""
-        if self.result_id is None and self.suite_id is None:
-            raise ValueError("Artifact must be associated with either a test result or test suite")
+        parent_count = sum(
+            [
+                self.playwright_result_id is not None,
+                self.result_id is not None,
+                self.suite_id is not None,
+            ]
+        )
 
-        if self.result_id is not None and self.suite_id is not None:
-            raise ValueError("Artifact cannot be associated with both test result and test suite")
+        if parent_count == 0:
+            raise ValueError(
+                "Artifact must be associated with exactly one parent (test result or suite)"
+            )
+
+        if parent_count > 1:
+            raise ValueError("Artifact cannot be associated with multiple parents")
 
     @property
     def file_size_mb(self) -> float:
@@ -286,7 +357,16 @@ class TestArtifact(BaseModel):
             return False
         return datetime.utcnow() >= self.expires_at
 
+    @property
+    def effective_content_type(self) -> str:
+        """Get the effective content type, preferring content_type over mime_type."""
+        return self.content_type if self.content_type is not None else self.mime_type
+
     def __str__(self) -> str:
         """String representation."""
-        parent = f"result={self.result_id}" if self.result_id else f"suite={self.suite_id}"
-        return f"TestArtifact(file='{self.file_name}', type={self.artifact_type.value}, {parent})"
+        parent = (
+            f"playwright_result={self.playwright_result_id}"
+            if self.playwright_result_id
+            else f"suite={self.suite_id}"
+        )
+        return f"TestArtifact(file='{self.file_name}', type={self.artifact_type}, {parent})"

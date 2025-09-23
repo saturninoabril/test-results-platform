@@ -316,9 +316,7 @@ class TestFileUploadOperations:
         test_data = b"This is a test file content"
         file_obj = BytesIO(test_data)
 
-        result = await client.upload_file(
-            file_obj, "screenshots/suite123/test.png", "image/png", {"test": "metadata"}
-        )
+        result = await client.upload_file(file_obj, "screenshots/suite123/test.png", "image/png")
 
         # Verify result
         assert result["storage_key"] == "screenshots/suite123/test.png"

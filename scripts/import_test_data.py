@@ -56,7 +56,6 @@ class PlaywrightDataMigrator:
     def __init__(self, client: AsyncClient):
         self.client = client
         self.created_frameworks = {}
-        self.created_environments = {}
         self.created_suites = {}
 
     async def load_playwright_data(self, file_path: str) -> dict[str, Any]:
@@ -105,11 +104,9 @@ class PlaywrightDataMigrator:
         print(f"✅ Created framework: {framework['name']} v{framework['version']}")
         return framework["id"]
 
-    async def create_environments_from_playwright(self, config: dict[str, Any]) -> dict[str, str]:
-        """Create environments from Playwright projects."""
+    async def get_environment_info_from_playwright(self, config: dict[str, Any]) -> dict[str, dict[str, str]]:
+        """Get environment info from Playwright projects (no longer creating separate entities)."""
         environments = {}
-
-        timestamp = int(time.time())
 
         for project in config.get("projects", []):
             project_name = project.get("name", project.get("id", "unknown"))
@@ -125,33 +122,20 @@ class PlaywrightDataMigrator:
             elif "ipad" in project_name.lower():
                 browser = "webkit"  # iPad uses WebKit
 
-            env_data = {
-                "name": f"playwright-{project_name}-{timestamp}",
+            environments[project_name] = {
+                "name": project_name,
                 "browser": browser,
                 "os": "linux",  # Assuming linux for CI
-                "metadata": {
-                    "project_id": project.get("id", project_name),
-                    "timeout": project.get("timeout", 60000),
-                    "retries": project.get("retries", 0),
-                    "actualWorkers": project.get("metadata", {}).get("actualWorkers", 1),
-                    "testDir": project.get("testDir", ""),
-                    "outputDir": project.get("outputDir", ""),
-                    "source": "example_data_migration"
-                }
+                "project_id": project.get("id", project_name),
+                "timeout": project.get("timeout", 60000),
+                "retries": project.get("retries", 0),
+                "testDir": project.get("testDir", ""),
+                "outputDir": project.get("outputDir", "")
             }
-
-            response = await self.client.post("/api/v1/environments", json=env_data)
-            if response.status_code != 201:
-                raise Exception(f"Failed to create environment: {response.status_code} - {response.text}")
-
-            environment = response.json()
-            environments[project_name] = environment["id"]
-            self.created_environments[project_name] = environment
-            print(f"✅ Created environment: {env_data['name']} ({browser} on {env_data['os']})")
 
         return environments
 
-    async def create_suite_from_playwright(self, framework_id: str, environment_id: str,
+    async def create_suite_from_playwright(self, environment_name: str,
                                          suite_data: dict[str, Any], stats: dict[str, Any]) -> str:
         """Create test suite from Playwright suite data."""
 
@@ -171,15 +155,25 @@ class PlaywrightDataMigrator:
         duration_ms = int(stats.get("duration", 0))
 
         suite_create_data = {
-            "framework_id": framework_id,
-            "environment_id": environment_id,
             "name": f"Playwright Test Suite - {suite_data.get('title', 'Unknown')}",
             "total_count": total_tests,
             "passed_count": passed_tests,
             "failed_count": failed_tests,
             "skipped_count": skipped_tests,
             "duration_ms": duration_ms,
-            "metadata": {
+            # Framework info moved to framework_metadata
+            "framework_metadata": {
+                "name": "playwright",
+                "version": "1.55.0",
+                "source": "example_data_migration"
+            },
+            # Environment info moved to environment_metadata
+            "environment_metadata": {
+                "name": environment_name,
+                "browser": "chrome",  # Default browser for project
+                "source": "example_data_migration"
+            },
+            "server_metadata": {
                 "file": suite_data.get("file", ""),
                 "title": suite_data.get("title", ""),
                 "column": suite_data.get("column", 0),
@@ -266,14 +260,14 @@ class PlaywrightDataMigrator:
         # Load data
         data = await self.load_playwright_data(file_path)
 
-        # Create framework
-        framework_id = await self.create_framework_from_playwright(data["config"])
+        # Create framework (framework info now stored in metadata)
+        await self.create_framework_from_playwright(data["config"])
 
-        # Create environments for each project
-        environments = await self.create_environments_from_playwright(data["config"])
+        # Get environment info for each project (no longer creating separate entities)
+        environments = await self.get_environment_info_from_playwright(data["config"])
 
         migration_results = {
-            "framework_id": framework_id,
+            "framework_name": "playwright", # Framework info now in metadata
             "environments": environments,
             "suites": [],
             "total_results": 0
@@ -298,7 +292,6 @@ class PlaywrightDataMigrator:
                     print(f"⚠️  Skipping unknown project: {project_name}")
                     continue
 
-                environment_id = environments[project_name]
 
                 # Filter suite data for this project
                 project_suite_data = {
@@ -334,7 +327,7 @@ class PlaywrightDataMigrator:
                 # Create suite if it has specs
                 if project_suite_data["specs"]:
                     suite_id = await self.create_suite_from_playwright(
-                        framework_id, environment_id, project_suite_data, data["stats"]
+                        project_name, project_suite_data, data["stats"]
                     )
 
                     # Create results
@@ -358,7 +351,6 @@ class CypressDataMigrator:
     def __init__(self, client: AsyncClient):
         self.client = client
         self.created_frameworks = {}
-        self.created_environments = {}
         self.created_suites = {}
 
     async def load_cypress_data(self, file_path: str) -> dict[str, Any]:
@@ -414,39 +406,8 @@ class CypressDataMigrator:
         print(f"✅ Created framework: {framework['name']} v{framework['version']}")
         return framework["id"]
 
-    async def create_environment_from_cypress(self, meta: dict[str, Any]) -> str:
-        """Create environment from Cypress meta."""
-        timestamp = int(time.time())
-        test_meta = meta.get("marge", {}).get("options", {}).get("testMeta", {})
 
-        # Map electron to chrome (Cypress's Electron browser is essentially Chrome)
-        original_browser = test_meta.get("browser", "electron")
-        browser = "chrome" if original_browser == "electron" else original_browser
-
-        env_data = {
-            "name": f"cypress-test-environment-{timestamp}",
-            "browser": browser,
-            "os": test_meta.get("platform", "linux"),
-            "metadata": {
-                "headless": test_meta.get("headless", True),
-                "branch": test_meta.get("branch", "master"),
-                "buildId": test_meta.get("buildId", "unknown"),
-                "testFileAttempt": test_meta.get("testFileAttempt", 1),
-                "source": "example_data_migration",
-                "original_browser": original_browser
-            }
-        }
-
-        response = await self.client.post("/api/v1/environments", json=env_data)
-        if response.status_code != 201:
-            raise Exception(f"Failed to create environment: {response.status_code} - {response.text}")
-
-        environment = response.json()
-        self.created_environments["cypress-env"] = environment
-        print(f"✅ Created environment: {env_data['name']} ({env_data['browser']} on {env_data['os']})")
-        return environment["id"]
-
-    async def create_suite_from_cypress(self, framework_id: str, environment_id: str,
+    async def create_suite_from_cypress(self, environment_name: str, browser: str,
                                       stats: dict[str, Any], _results: list[dict[str, Any]]) -> str:
         """Create test suite from Cypress stats and results."""
 
@@ -456,15 +417,25 @@ class CypressDataMigrator:
         duration_ms = int(stats.get("duration", 0))
 
         suite_create_data = {
-            "framework_id": framework_id,
-            "environment_id": environment_id,
             "name": "Cypress Test Suite - Accessibility Tests",
             "total_count": stats.get("tests", 0),
             "passed_count": stats.get("passes", 0),
             "failed_count": stats.get("failures", 0),
             "skipped_count": stats.get("skipped", 0),
             "duration_ms": duration_ms,
-            "metadata": {
+            # Framework info moved to framework_metadata
+            "framework_metadata": {
+                "name": "cypress",
+                "version": "7.2.0",
+                "source": "example_data_migration"
+            },
+            # Environment info moved to environment_metadata
+            "environment_metadata": {
+                "name": environment_name,
+                "browser": browser,
+                "source": "example_data_migration"
+            },
+            "server_metadata": {
                 "suites": stats.get("suites", 0),
                 "testsRegistered": stats.get("testsRegistered", 0),
                 "passPercent": stats.get("passPercent", 0),
@@ -588,21 +559,19 @@ class CypressDataMigrator:
         # Load data
         data = await self.load_cypress_data(file_path)
 
-        # Create framework
-        framework_id = await self.create_framework_from_cypress(data["meta"])
+        test_meta = data["meta"].get("marge", {}).get("options", {}).get("testMeta", {})
+        environment_name = "cypress-test-environment"
+        browser = "chrome" if test_meta.get("browser", "electron") == "electron" else test_meta.get("browser", "chrome")
 
-        # Create environment
-        environment_id = await self.create_environment_from_cypress(data["meta"])
-
-        # Create suite
-        suite_id = await self.create_suite_from_cypress(framework_id, environment_id, data["stats"], data["results"])
+        # Create suite with metadata
+        suite_id = await self.create_suite_from_cypress(environment_name, browser, data["stats"], data["results"])
 
         # Create results
         result_ids = await self.create_results_from_cypress(suite_id, data["results"])
 
         migration_results = {
-            "framework_id": framework_id,
-            "environment_id": environment_id,
+            "framework_name": "cypress", # Framework info now in metadata
+            "environment_name": environment_name,
             "suite_id": suite_id,
             "result_ids": result_ids,
             "total_results": len(result_ids)
@@ -643,12 +612,8 @@ async def validate_data_compatibility():
         results = results_response.json()
         print(f"✅ Found {len(results)} results")
 
-        # Test filtering capabilities
-        if suites:
-            framework_id = suites[0]["framework_id"]
-            filtered_suites = await client.get(f"/api/v1/suites?framework_id={framework_id}")
-            assert filtered_suites.status_code == 200
-            print(f"✅ Framework filtering works: {len(filtered_suites.json())} suites for framework")
+        # Test filtering capabilities - framework_id filtering removed
+        # Framework info now stored in framework_metadata
 
         if results:
             # Test status filtering
@@ -661,10 +626,9 @@ async def validate_data_compatibility():
             assert accessibility_results.status_code == 200
             print(f"✅ Tag filtering works: {len(accessibility_results.json())} accessibility results")
 
-        # Test statistics
+        # Test statistics - framework_id filtering removed
         if suites:
-            framework_id = suites[0]["framework_id"]
-            stats_response = await client.get(f"/api/v1/suites/statistics?framework_id={framework_id}")
+            stats_response = await client.get("/api/v1/suites/statistics")
             assert stats_response.status_code == 200
             stats = stats_response.json()
             print(f"✅ Statistics work: {stats['total_suites']} suites, {stats['pass_rate_percent']:.1f}% pass rate")
@@ -714,19 +678,19 @@ async def run_data_migration():
 
         print("🎭 Playwright Migration:")
         print(f"   • Framework: {playwright_migrator.created_frameworks.get('playwright', {}).get('name', 'N/A')}")
-        print(f"   • Environments: {len(playwright_migrator.created_environments)}")
+        print("   • Environment info: stored in suite metadata")
         print(f"   • Suites: {len(playwright_results.get('suites', []))}")
         print(f"   • Results: {playwright_results.get('total_results', 0)}")
 
         print("\n🌲 Cypress Migration:")
         print(f"   • Framework: {cypress_migrator.created_frameworks.get('cypress', {}).get('name', 'N/A')}")
-        print(f"   • Environment: {cypress_migrator.created_environments.get('cypress-env', {}).get('name', 'N/A')}")
+        print("   • Environment info: stored in suite metadata")
         print(f"   • Results: {cypress_results.get('total_results', 0)}")
 
         print("\n📈 Total Database Contents:")
-        print(f"   • Frameworks: {validation_results['frameworks_count']}")
-        print(f"   • Environments: {validation_results['environments_count']}")
-        print(f"   • Suites: {validation_results['suites_count']}")
+        print(f"   • Frameworks: {validation_results['frameworks_count']} (legacy)")
+        print(f"   • Environments: {validation_results['environments_count']} (legacy)")
+        print(f"   • Suites: {validation_results['suites_count']} (with metadata)")
         print(f"   • Results: {validation_results['results_count']}")
 
         print("\n✅ Data migration and validation completed successfully!")

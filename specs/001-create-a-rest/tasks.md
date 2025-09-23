@@ -79,18 +79,6 @@ Follow RED-GREEN-Refactor TDD cycle: write failing tests first, then implement t
 - Create database migration system using Alembic
 - Write unit tests for database connection management
 
-### 12. Create TestFramework model [P]
-- Implement SQLAlchemy model with UUID, name, version, metadata fields
-- Add validation rules for name format and semantic versioning
-- Create database migration for test_frameworks table with indexes
-- Write unit tests for model validation and database operations
-
-### 13. Create TestEnvironment model [P]
-- Implement SQLAlchemy model with UUID, name, browser, os, metadata fields
-- Add validation for browser/OS combinations and predefined lists
-- Create database migration for test_environments table with indexes
-- Write unit tests for environment model validation
-
 ### 14. Create TestSuite model [P]
 - Implement SQLAlchemy model with counts, duration, timestamps
 - Add foreign key relationships to framework and environment

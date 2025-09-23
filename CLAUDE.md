@@ -67,5 +67,8 @@ tests/
 - Matrix build support for multiple browsers/environments
 - Artifact upload integration (screenshots, videos, reports)
 
+## Makefile commands
+- Make use of make commands and add/update as necessary
+
 ## Next Phase
 Ready for /tasks command to generate implementation tasks following TDD principles with CI/CD integration support.

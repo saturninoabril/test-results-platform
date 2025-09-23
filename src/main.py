@@ -8,8 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api.artifacts import router as artifacts_router
 from .api.auth import router as auth_router
-from .api.environments import router as environments_router
-from .api.frameworks import router as frameworks_router
+from .api.playwright import router as playwright_router
 from .api.results import router as results_router
 from .api.suites import router as suites_router
 from .lib.config import get_settings
@@ -25,6 +24,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     # Startup
     logger.info("Starting Test Results Management API", version="0.4.0", env=settings.app.env)
+
+    # Initialize database
+    from .lib.database import create_tables, init_database
+
+    # Import all models to register them with Base.metadata
+    try:
+        await init_database()
+        await create_tables()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error("Database initialization failed", error=str(e))
+        logger.warning("API will continue without database - some features may not work")
 
     # Send startup notification
     try:
@@ -47,6 +58,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     # Shutdown
     logger.info("Shutting down Test Results Management API")
+
+    # Close database connections
+    from .lib.database import close_database
+
+    try:
+        await close_database()
+        logger.info("Database connections closed")
+    except Exception as e:
+        logger.error("Error closing database connections", error=str(e))
 
     # Send shutdown notification
     try:
@@ -82,12 +102,11 @@ app.add_middleware(
 )
 
 # Include API routers
-app.include_router(frameworks_router)
-app.include_router(environments_router)
 app.include_router(suites_router)
 app.include_router(results_router)
 app.include_router(artifacts_router)
 app.include_router(auth_router)
+app.include_router(playwright_router)
 
 
 @app.get("/health")

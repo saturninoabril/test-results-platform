@@ -6,6 +6,7 @@ Represents a single test execution with status, timing, and error details.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -13,9 +14,9 @@ if TYPE_CHECKING:
     from .test_artifact import TestArtifact
     from .test_suite import TestSuite
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from .base import BaseModel
@@ -28,6 +29,8 @@ class TestStatus(str, Enum):
     FAILED = "failed"
     SKIPPED = "skipped"
     PENDING = "pending"
+    FLAKY = "flaky"
+    RUNNING = "running"
 
 
 class TestResult(BaseModel):
@@ -54,8 +57,8 @@ class TestResult(BaseModel):
         comment="Complete test path with suite hierarchy",
     )
 
-    status: Mapped[TestStatus] = mapped_column(
-        SQLEnum(TestStatus, name="test_status"),
+    status: Mapped[str] = mapped_column(
+        SQLEnum(TestStatus, name="test_status", native_enum=False),
         nullable=False,
         comment="Test execution status",
     )
@@ -65,6 +68,18 @@ class TestResult(BaseModel):
         nullable=False,
         default=0,
         comment="Test execution time in milliseconds",
+    )
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        comment="Test execution start time",
+    )
+
+    completed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        comment="Test execution completion time",
     )
 
     error_message: Mapped[str | None] = mapped_column(
@@ -87,7 +102,7 @@ class TestResult(BaseModel):
     )
 
     tags: Mapped[list[str] | None] = mapped_column(
-        ARRAY(String(100)),
+        JSON,
         nullable=True,
         comment="Test tags and annotations",
     )
@@ -98,16 +113,34 @@ class TestResult(BaseModel):
         comment="Framework-specific test identifier",
     )
 
+    # TODO: check if needed
     config_metadata: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB,
+        JSON,
         nullable=True,
         comment="Test-specific metadata and configuration",
     )
 
-    # Relationships
-    suite: Mapped[TestSuite] = relationship(
-        "TestSuite", back_populates="test_results", lazy="select"
+    # Playwright-specific fields
+    location: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Test location: file path, line, and column number",
     )
+
+    project_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Playwright project name (e.g., Desktop Chrome)",
+    )
+
+    timeout_ms: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Test timeout in milliseconds",
+    )
+
+    # Relationships
+    suite: Mapped[TestSuite] = relationship("TestSuite", lazy="select")
 
     test_artifacts: Mapped[list[TestArtifact]] = relationship(
         "TestArtifact", back_populates="test_result", cascade="all, delete-orphan", lazy="select"
@@ -118,13 +151,18 @@ class TestResult(BaseModel):
         CheckConstraint("duration_ms >= 0", name="ck_test_duration_non_negative"),
         CheckConstraint("retry_count >= 0", name="ck_retry_count_non_negative"),
         CheckConstraint("retry_count <= 10", name="ck_retry_count_reasonable"),
-        CheckConstraint("array_length(tags, 1) <= 20", name="ck_tags_limit"),
+        CheckConstraint(
+            "timeout_ms IS NULL OR (timeout_ms >= 1000 AND timeout_ms <= 3600000)",
+            name="ck_timeout_ms_reasonable",
+        ),
         Index("ix_test_results_suite_id", "suite_id"),
         Index("ix_test_results_test_name", "test_name"),
         Index("ix_test_results_status", "status"),
         Index("ix_test_results_suite_status", "suite_id", "status"),
         Index("ix_test_results_external_id", "external_id"),
-        Index("ix_test_results_tags", "tags", postgresql_using="gin"),
+        # Note: JSON tags field - consider using JSONB for indexing if needed
+        Index("ix_test_results_project_name", "project_name"),
+        # Note: JSON location field - consider using JSONB for indexing if needed
     )
 
     @validates("test_name")
@@ -209,6 +247,7 @@ class TestResult(BaseModel):
 
         return external_id
 
+    # TODO: check if needed
     @validates("config_metadata")
     def validate_config_metadata(
         self, key: str, config_metadata: dict[str, Any] | None
@@ -221,6 +260,64 @@ class TestResult(BaseModel):
             raise ValueError("Config metadata must be a dictionary")
 
         return config_metadata
+
+    @validates("location")
+    def validate_location(self, key: str, location: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Validate location format for Playwright test files."""
+        if location is None:
+            return None
+
+        if not isinstance(location, dict):
+            raise ValueError("Location must be a dictionary")
+
+        # Validate required fields if location is provided
+        if location:
+            if "file" not in location:
+                raise ValueError("Location must include 'file' field")
+
+            file_path = location.get("file")
+            if not isinstance(file_path, str) or not file_path.strip():
+                raise ValueError("Location file must be a non-empty string")
+
+            # Validate line and column if provided
+            line = location.get("line")
+            if line is not None and (not isinstance(line, int) or line < 1):
+                raise ValueError("Location line must be a positive integer")
+
+            column = location.get("column")
+            if column is not None and (not isinstance(column, int) or column < 0):
+                raise ValueError("Location column must be a non-negative integer")
+
+        return location
+
+    @validates("project_name")
+    def validate_project_name(self, key: str, project_name: str | None) -> str | None:
+        """Validate Playwright project name."""
+        if project_name is None:
+            return None
+
+        project_name = project_name.strip()
+        if not project_name:
+            return None
+
+        if len(project_name) > 100:
+            raise ValueError("Project name cannot exceed 100 characters")
+
+        return project_name
+
+    @validates("timeout_ms")
+    def validate_timeout_ms(self, key: str, timeout_ms: int | None) -> int | None:
+        """Validate test timeout in milliseconds."""
+        if timeout_ms is None:
+            return None
+
+        if timeout_ms < 1000:
+            raise ValueError("Timeout must be at least 1000ms (1 second)")
+
+        if timeout_ms > 3600000:
+            raise ValueError("Timeout cannot exceed 3600000ms (1 hour)")
+
+        return timeout_ms
 
     @property
     def duration_seconds(self) -> float:
@@ -250,4 +347,4 @@ class TestResult(BaseModel):
 
     def __str__(self) -> str:
         """String representation."""
-        return f"TestResult(name='{self.test_name}', status={self.status.value})"
+        return f"TestResult(name='{self.test_name}', status={self.status})"
